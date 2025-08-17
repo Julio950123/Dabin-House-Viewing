@@ -36,17 +36,13 @@ from linebot.models import FollowEvent, QuickReply, QuickReplyButton, MessageAct
 
 @handler.add(FollowEvent)
 def handle_follow(event):
-    welcome_text = (
-        "歡迎加入張大彬的 LINE！\n"
+    quick_reply = TextSendMessage(
+        text="歡迎加入張大彬的 LINE！\n"
         "我可以協助你：\n"
         "✔ 找適合的房子\n"
         "✔ 分析物件行情\n"
         "✔ 協助你賣房找買家！\n\n"
-        "請選擇您的身分："
-    )
-
-    msg = TextSendMessage(
-        text=welcome_text,                      # ⬅️ 必填
+        "請選擇您的身分：",
         quick_reply=QuickReply(
             items=[
                 QuickReplyButton(
@@ -54,12 +50,11 @@ def handle_follow(event):
                 ),
                 QuickReplyButton(
                     action=MessageAction(label="我是賣家", text="我是賣家")
-                ),
+                )
             ]
-        ),
+        )
     )
-
-    line_bot_api.reply_message(event.reply_token, msg)
+    line_bot_api.reply_message(event.reply_token, quick_reply)
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
