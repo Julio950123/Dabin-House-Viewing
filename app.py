@@ -37,7 +37,6 @@ from linebot.models import FollowEvent, QuickReply, QuickReplyButton, MessageAct
 @handler.add(FollowEvent)
 def handle_follow(event):
     quick_reply = TextSendMessage(
-        text="歡迎加入張大彬的 LINE！請問您是？",
         quick_reply=QuickReply(
             items=[
                 QuickReplyButton(
