@@ -32,6 +32,25 @@ def callback():
         abort(400)
     return "OK"
 
+from linebot.models import FollowEvent, QuickReply, QuickReplyButton, MessageAction
+
+@handler.add(FollowEvent)
+def handle_follow(event):
+    quick_reply = TextSendMessage(
+        text="歡迎加入張大彬的 LINE！請問您是？",
+        quick_reply=QuickReply(
+            items=[
+                QuickReplyButton(
+                    action=MessageAction(label="我是買家", text="我是買家")
+                ),
+                QuickReplyButton(
+                    action=MessageAction(label="我是賣家", text="我是賣家")
+                )
+            ]
+        )
+    )
+    line_bot_api.reply_message(event.reply_token, quick_reply)
+
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     msg = event.message.text.strip()
