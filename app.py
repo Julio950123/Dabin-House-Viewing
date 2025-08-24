@@ -61,11 +61,11 @@ def handle_follow(event):
 def handle_text(event):
     msg = (event.message.text or "").strip()
     if msg == "我是買家":
-        reply = "收到～買家服務啟動 ✅\n請告訴我：預算／房型／區域。"
+        reply = "收到～買家服務啟動 ✅\n請告訴我：預算／房型／區域"
     elif msg == "我是賣家":
-        reply = "收到～賣家服務啟動 ✅\n請提供：地點／建物型態／期望售價。"
+        reply = "收到～賣家服務啟動 ✅\n請提供：地點／建物型態／期望售價"
     else:
-        reply = "輸入「我是買家」或「我是賣家」開始；或直接敘述你的需求。"
+        reply = "輸入「我是買家」或「我是賣家」開始；或直接敘述你的需求"
     line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
 
 if __name__ == "__main__":
