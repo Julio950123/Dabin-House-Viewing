@@ -162,6 +162,7 @@ def submit_form():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # -------------------- 搜尋物件 --------------------
+# -------------------- 搜尋表單提交 --------------------
 @app.route("/submit_search", methods=["POST"])
 def submit_search():
     try:
@@ -176,17 +177,19 @@ def submit_search():
         if not user_id:
             return jsonify({"status": "error", "message": "❌ 缺少 user_id"}), 400
 
-        # ✅ 先把搜尋條件存進 Firestore
-        db.collection("search_logs").add({
+        # ✅ 存到 search_form 集合（以 user_id 為文件 ID）
+        doc_ref = db.collection("search_form").document(user_id)
+        payload = {
             "user_id": user_id,
             "budget": budget,
             "room": room,
             "genre": genre,
-            "created_at": firestore.SERVER_TIMESTAMP
-        })
-        log.info("[submit_search] 已存搜尋紀錄到 search_logs")
+            "updated_at": firestore.SERVER_TIMESTAMP
+        }
+        doc_ref.set(payload, merge=True)
+        log.info("[submit_search] ✅ 已寫入 search_form")
 
-        # 🔹 先推送「搜尋條件卡」
+        # 🔹 回傳搜尋條件卡
         search_card = {
             "type": "bubble",
             "size": "mega",
@@ -205,7 +208,7 @@ def submit_search():
         }
         line_bot_api.push_message(user_id, FlexSendMessage(alt_text="搜尋條件", contents=search_card))
 
-        # 🔹 Firestore 查詢 (houses)
+        # 🔹 繼續查詢 houses 集合
         query = db.collection("houses")
         if budget and budget != "不限":
             try:
@@ -235,7 +238,6 @@ def submit_search():
             except Exception as e:
                 log.exception(f"[submit_search] 物件 {doc.id} 產生卡片失敗: {e}")
 
-        # 🔹 推送搜尋結果
         if not bubbles:
             no_result = {
                 "type": "bubble",
@@ -255,6 +257,7 @@ def submit_search():
     except Exception as e:
         log.exception("[submit_search] error")
         return jsonify({"status": "error", "message": str(e)}), 500
+
 
 # -------------------- Debug push --------------------
 @app.route("/debug/push/<user_id>")
