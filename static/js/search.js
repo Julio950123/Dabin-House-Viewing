@@ -36,7 +36,7 @@ function bindFormSubmit() {
                 body: JSON.stringify(payload)
             });
 
-            const text = await res.text();   // ⚠️ 先讀純文字
+            const text = await res.text();
             console.log("🔍 原始回傳:", text);
 
             let data = {};
@@ -53,7 +53,6 @@ function bindFormSubmit() {
                 alert("❌ 錯誤：" + (data.message || "未知錯誤") + "\n原始回傳: " + text);
             }
         } catch (err) {
-            console.error("⚠️ 網路錯誤:", err);
             alert("⚠️ 網路錯誤：" + err.message);
         }
     });

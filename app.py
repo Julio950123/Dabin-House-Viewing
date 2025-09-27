@@ -162,6 +162,8 @@ def submit_form():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # -------------------- 搜尋物件 --------------------
+import traceback
+
 @app.route("/submit_search", methods=["POST"])
 def submit_search():
     try:
@@ -187,8 +189,7 @@ def submit_search():
                     max_budget = 9999999
                 query = query.where("budget", "<=", int(max_budget))
             except Exception as e:
-                log.error(f"[submit_search] 預算轉換失敗: {e}")
-                return jsonify({"status": "error", "message": f"預算格式錯誤: {budget}"}), 400
+                return jsonify({"status": "error", "message": f"❌ 預算格式錯誤: {budget}, {str(e)}"}), 400
 
         if room:
             query = query.where("room", "==", room)
@@ -205,8 +206,9 @@ def submit_search():
                 if bubble:
                     bubbles.append(bubble)
             except Exception as e:
-                log.exception(f"[submit_search] 物件 {doc.id} 產生 Flex 失敗")
-                return jsonify({"status": "error", "message": f"物件 {doc.id} 產生卡片失敗: {str(e)}"}), 500
+                tb = traceback.format_exc()
+                log.error(f"[submit_search] 物件 {doc.id} 產生卡片失敗: {e}\n{tb}")
+                return jsonify({"status": "error", "message": f"❌ 物件 {doc.id} 產生卡片失敗: {str(e)}"}), 500
 
         if not bubbles:
             no_result = {
@@ -224,12 +226,10 @@ def submit_search():
             line_bot_api.push_message(user_id, FlexSendMessage(alt_text="搜尋結果", contents=carousel))
             return jsonify({"status": "ok", "count": len(bubbles)}), 200
 
-    except LineBotApiError as e:
-        log.exception("[submit_search] LINE API 錯誤")
-        return jsonify({"status": "error", "message": f"LINE API 錯誤: {e}"}), 500
     except Exception as e:
-        log.exception("[submit_search] 其他錯誤")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        tb = traceback.format_exc()
+        log.error(f"[submit_search] 其他錯誤: {e}\n{tb}")
+        return jsonify({"status": "error", "message": f"❌ 後端錯誤: {str(e)}"}), 500
     
 # -------------------- Debug push --------------------
 @app.route("/debug/push/<user_id>")
