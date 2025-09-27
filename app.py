@@ -297,67 +297,35 @@ def submit_form():
 @app.route("/submit_search", methods=["POST"])
 def submit_search():
     try:
+        # 取得表單資料
         data = request.get_json(force=True, silent=True) or request.form.to_dict()
         budget = data.get("budget")
         room   = data.get("room")
         genre  = data.get("genre")
-        user_id= data.get("user_id")
 
-        log.info(f"[submit_search] 收到資料: {data}")
-        log.info(f"[submit_search] budget={budget}, room={room}, genre={genre}, user_id={user_id}")
+        logging.info(f"[submit_search] budget={budget}, room={room}, genre={genre}")
 
-        if not user_id:
-            return jsonify({"status": "error", "message": "missing user_id"}), 400
-
-        # 儲存 search_form 紀錄
-        db.collection("search_form").document().set({
-            "budget": budget,
-            "room": room,
-            "genre": genre,
-            "user_id": user_id,
-            "created_at": firestore.SERVER_TIMESTAMP
-        })
-
-        # 建立查詢
-        query = db.collection("listings")
-
-        if budget and "-" in budget:
-            min_budget, max_budget = budget.split("-")
-            min_budget, max_budget = int(min_budget), int(max_budget)
-            if min_budget > 0:
-                query = query.where("price", ">=", min_budget)
-            if max_budget < 99999:
-                query = query.where("price", "<=", max_budget)
-
-        if room and room.isdigit() and int(room) > 0:
-            query = query.where("room", "==", int(room))
-
-        if genre and genre != "不限":
+        # 查詢 Firestore（範例：集合叫 houses）
+        query = db.collection("houses")
+        if budget:
+            query = query.where("budget", "<=", int(budget))
+        if room:
+            query = query.where("room", "==", room)
+        if genre:
             query = query.where("genre", "==", genre)
 
-        docs = query.limit(5).stream()
-        bubbles = []
+        docs = query.stream()
+        results = []
         for doc in docs:
-            house = doc.to_dict() or {}
-            log.info(f"[submit_search] house={house}")
-            try:
-                bubbles.append(ft.listing_card(doc.id, house))
-            except Exception as e:
-                log.error(f"[submit_search] listing_card error, id={doc.id}, e={e}")
+            house = doc.to_dict()
+            house["id"] = doc.id
+            results.append(house)
 
-        if bubbles:
-            carousel = {"type": "carousel", "contents": bubbles}
-            line_bot_api.push_message(user_id, FlexSendMessage(alt_text="找到物件", contents=carousel))
-            log.info(f"[submit_search] ✅ 推送 {len(bubbles)} 筆結果")
-        else:
-            line_bot_api.push_message(user_id, TextSendMessage(text="❌ 沒有符合的物件"))
-            log.info("[submit_search] ⚠️ 沒有符合的物件")
-
-        return jsonify({"status": "success"})
+        return jsonify({"status": "ok", "results": results})
 
     except Exception as e:
-        log.exception(f"[submit_search] ❌ 系統錯誤: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        logging.exception("搜尋失敗")
+        return jsonify({"status": "error", "message": str(e)}), 400
 
 
     
