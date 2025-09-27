@@ -1,0 +1,31 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+*.env
+*.log
+
+# 環境設定檔
+.env*
+
+# Firebase/金鑰類
+*firebase-adminsdk*.json
+serviceAccount*.json
+dabin-house-viewing-*.json
+
+# Firebase/Google Credentials
+serviceAccountKey.json
+*.pem
+*.p12
+
+# Local environment files
+.env
+.env.local
+.env.prod
+.env.development
+
+# Pycache & logs
+__pycache__/
+*.pyc
+*.log
