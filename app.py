@@ -308,6 +308,7 @@ def submit_search():
         if not user_id:
             return jsonify({"status": "error", "message": "missing user_id"}), 400
 
+        # Firestore 紀錄搜尋條件
         db.collection("search_form").document().set({
             "budget": budget,
             "room": room,
@@ -316,35 +317,42 @@ def submit_search():
             "created_at": firestore.SERVER_TIMESTAMP
         })
 
+        # 查詢 listings
         query = db.collection("listings")
         if budget and "-" in budget:
-            min_budget, max_budget = budget.split("-")
-            min_budget, max_budget = int(min_budget), int(max_budget)
-            if min_budget > 0:
-                query = query.where("price", ">=", min_budget)
-            if max_budget < 99999:
-                query = query.where("price", "<=", max_budget)
+            try:
+                min_budget, max_budget = map(int, budget.split("-"))
+                if min_budget > 0:
+                    query = query.where("price", ">=", min_budget)
+                if max_budget < 99999:
+                    query = query.where("price", "<=", max_budget)
+            except Exception as e:
+                log.warning(f"[submit_search] 預算解析錯誤: {e}")
         if room and room.isdigit() and int(room) > 0:
             query = query.where("room", "==", int(room))
         if genre and genre != "不限":
             query = query.where("genre", "==", genre)
 
         docs = query.limit(5).stream()
-        bubbles = []
+        results = []
         for doc in docs:
             house = doc.to_dict() or {}
-            try:
-                bubbles.append(ft.listing_card(doc.id, house))
-            except Exception as e:
-                log.error(f"[submit_search] listing_card error, id={doc.id}, e={e}")
+            house["id"] = doc.id
+            results.append(house)
 
-        if bubbles:
-            carousel = {"type": "carousel", "contents": bubbles}
-            line_bot_api.push_message(user_id, FlexSendMessage(alt_text="找到物件", contents=carousel))
+        # 👉 推 LINE
+        if results:
+            try:
+                bubbles = [ft.listing_card(r["id"], r) for r in results]
+                carousel = {"type": "carousel", "contents": bubbles}
+                line_bot_api.push_message(user_id, FlexSendMessage(alt_text="找到物件", contents=carousel))
+            except Exception as e:
+                log.error(f"[submit_search] push Flex 失敗: {e}")
         else:
             line_bot_api.push_message(user_id, TextSendMessage(text="❌ 沒有符合的物件"))
 
-        return jsonify({"status": "success"}), 200
+        # 👉 回瀏覽器 JSON
+        return jsonify({"status": "success", "results": results}), 200
 
     except Exception as e:
         log.exception("[submit_search] error")
