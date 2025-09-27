@@ -162,74 +162,49 @@ def submit_form():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # -------------------- 搜尋物件 --------------------
-import traceback
-
 @app.route("/submit_search", methods=["POST"])
 def submit_search():
     try:
         data = request.get_json(force=True, silent=True) or request.form.to_dict()
         user_id = data.get("user_id")
-        budget  = data.get("budget")
-        room    = data.get("room")
-        genre   = data.get("genre")
+        budget  = data.get("budget", "未填")
+        room    = data.get("room", "未填")
+        genre   = data.get("genre", "未填")
 
         log.info(f"[submit_search] user_id={user_id}, budget={budget}, room={room}, genre={genre}")
 
         if not user_id:
             return jsonify({"status": "error", "message": "❌ 缺少 user_id"}), 400
 
-        # Firestore 查詢
-        query = db.collection("houses")
-        if budget and budget != "不限":
-            try:
-                max_budget = budget.replace("萬", "")
-                if "-" in max_budget:
-                    max_budget = int(max_budget.split("-")[-1])
-                elif "以上" in max_budget:
-                    max_budget = 9999999
-                query = query.where("budget", "<=", int(max_budget))
-            except Exception as e:
-                return jsonify({"status": "error", "message": f"❌ 預算格式錯誤: {budget}, {str(e)}"}), 400
-
-        if room:
-            query = query.where("room", "==", room)
-        if genre and genre != "不限":
-            query = query.where("genre", "==", genre)
-
-        docs = list(query.stream())
-        bubbles = []
-
-        for doc in docs:
-            try:
-                data = doc.to_dict()
-                bubble = listing_card(doc.id, data)
-                if bubble:
-                    bubbles.append(bubble)
-            except Exception as e:
-                tb = traceback.format_exc()
-                log.error(f"[submit_search] 物件 {doc.id} 產生卡片失敗: {e}\n{tb}")
-                return jsonify({"status": "error", "message": f"❌ 物件 {doc.id} 產生卡片失敗: {str(e)}"}), 500
-
-        if not bubbles:
-            no_result = {
-                "type": "bubble",
-                "body": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [{"type": "text", "text": "❌ 沒有符合條件的物件"}]
-                }
+        # 🔹 產生「搜尋條件卡」
+        search_card = {
+            "type": "bubble",
+            "size": "mega",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "md",
+                "contents": [
+                    {"type": "text", "text": "🔎 搜尋條件", "weight": "bold", "size": "lg", "color": "#EB941E"},
+                    {"type": "separator", "margin": "md"},
+                    {"type": "text", "text": f"💰 預算：{budget}", "wrap": True},
+                    {"type": "text", "text": f"🏠 格局：{room}", "wrap": True},
+                    {"type": "text", "text": f"🏢 型態：{genre}", "wrap": True}
+                ]
             }
-            line_bot_api.push_message(user_id, FlexSendMessage(alt_text="搜尋結果", contents=no_result))
-            return jsonify({"status": "ok", "count": 0}), 200
-        else:
-            carousel = {"type": "carousel", "contents": bubbles[:10]}
-            line_bot_api.push_message(user_id, FlexSendMessage(alt_text="搜尋結果", contents=carousel))
-            return jsonify({"status": "ok", "count": len(bubbles)}), 200
+        }
+
+        # 推送回 LINE
+        line_bot_api.push_message(
+            user_id,
+            FlexSendMessage(alt_text="搜尋條件", contents=search_card)
+        )
+
+        return jsonify({"status": "ok"}), 200
 
     except Exception as e:
-        tb = traceback.format_exc()
-        log.error(f"[submit_search] 其他錯誤: {e}\n{tb}")
-        return jsonify({"status": "error", "message": f"❌ 後端錯誤: {str(e)}"}), 500
+        log.exception("[submit_search] error")
+        return jsonify({"status": "error", "message": str(e)}), 500
     
 # -------------------- Debug push --------------------
 @app.route("/debug/push/<user_id>")
