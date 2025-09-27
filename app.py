@@ -297,35 +297,58 @@ def submit_form():
 @app.route("/submit_search", methods=["POST"])
 def submit_search():
     try:
-        # 取得表單資料
-        data = request.get_json(force=True, silent=True) or request.form.to_dict()
+        data = request.get_json(force=True)
+        user_id = data.get("user_id")   # LIFF 傳過來的 user_id
         budget = data.get("budget")
         room   = data.get("room")
         genre  = data.get("genre")
 
-        logging.info(f"[submit_search] budget={budget}, room={room}, genre={genre}")
+        logging.info(f"[submit_search] user_id={user_id}, budget={budget}, room={room}, genre={genre}")
 
-        # 查詢 Firestore（範例：集合叫 houses）
+        # Firestore 查詢
         query = db.collection("houses")
-        if budget:
-            query = query.where("budget", "<=", int(budget))
+        if budget and budget != "不限":
+            query = query.where("budget", "<=", int(budget.split("-")[-1].replace("萬","")))
         if room:
             query = query.where("room", "==", room)
-        if genre:
+        if genre and genre != "不限":
             query = query.where("genre", "==", genre)
 
         docs = query.stream()
-        results = []
+        bubbles = []
         for doc in docs:
-            house = doc.to_dict()
-            house["id"] = doc.id
-            results.append(house)
+            bubbles.append(listing_card(doc.id, doc.to_dict()))
 
-        return jsonify({"status": "ok", "results": results})
+        if not bubbles:
+            # 沒找到 → 回傳文字訊息
+            line_bot_api.push_message(user_id, FlexSendMessage(
+                alt_text="搜尋結果",
+                contents={
+                    "type": "bubble",
+                    "body": {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [{"type": "text", "text": "❌ 沒有符合條件的物件"}]
+                    }
+                }
+            ))
+        else:
+            # 推送 Flex Carousel
+            flex_message = {
+                "type": "carousel",
+                "contents": bubbles[:10]  # 限制最多 10 個
+            }
+            line_bot_api.push_message(user_id, FlexSendMessage(
+                alt_text="搜尋結果",
+                contents=flex_message
+            ))
+
+        return jsonify({"status": "ok"})
 
     except Exception as e:
         logging.exception("搜尋失敗")
         return jsonify({"status": "error", "message": str(e)}), 400
+
 
 
     
