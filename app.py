@@ -161,55 +161,74 @@ def submit_form():
         log.exception("[submit_form] error")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# -------------------- 搜尋表單提交 --------------------
+
 # -------------------- 查詢物件 --------------------
 @app.route("/submit_search", methods=["POST"])
 def submit_search():
     try:
         data = request.get_json(force=True)
-        user_id = data.get("user_id")   # LIFF 傳過來的 user_id
-        budget = data.get("budget")
-        room   = data.get("room")
-        genre  = data.get("genre")
+        user_id = data.get("user_id")
+        budget  = data.get("budget")
+        room    = data.get("room")
+        genre   = data.get("genre")
 
         log.info(f"[submit_search] 收到 user_id={user_id}, budget={budget}, room={room}, genre={genre}")
 
-        # Firestore 查詢 (改成 listings)
+        if not user_id:
+            return jsonify({"status": "error", "message": "❌ 缺少 user_id"}), 400
+
+        # Firestore 查 listings 集合
         query = db.collection("listings")
 
-        # ✅ 預算篩選
-        if budget and budget != "不限":
-            try:
-                max_budget = int(budget.split("-")[-1].replace("萬", "").replace("以上", "99999"))
-                query = query.where("price", "<=", max_budget)
-                log.info(f"[submit_search] 加入 budget 條件 <= {max_budget}")
-            except Exception as e:
-                log.warning(f"[submit_search] 預算解析失敗: {e}")
-
-        # ✅ 房型篩選
-        if room and room != "不限":
-            query = query.where("room", "==", room)
+        # ✅ 格局條件 (轉 int，比對 Firestore 的 room:int)
+        if room and room != "0":  # 0 = 不限
+            query = query.where("room", "==", int(room))
             log.info(f"[submit_search] 加入 room 條件 == {room}")
 
-        # ✅ 類型篩選
-        if genre and genre != "不限":
+        # ✅ 型態條件（必填）
+        if genre:
             query = query.where("genre", "==", genre)
             log.info(f"[submit_search] 加入 genre 條件 == {genre}")
 
-        # 執行查詢
+        # 先拿 Firestore 查詢結果
         docs = list(query.stream())
-        log.info(f"[submit_search] 找到 {len(docs)} 筆 listings")
+        log.info(f"[submit_search] 找到 {len(docs)} 筆 listings (未過濾價格)")
 
+        for d in docs:
+            log.info(f"[submit_search] doc_id={d.id}, price={d.to_dict().get('price')}, room={d.to_dict().get('room')}, genre={d.to_dict().get('genre')}")
+
+        # ✅ 預算範圍解析
+        min_budget, max_budget = None, None
+        if budget:
+            try:
+                if "-" in budget:  # 例：1000-1500
+                    parts = budget.replace("萬", "").split("-")
+                    min_budget, max_budget = int(parts[0]), int(parts[1])
+                elif "以下" in budget:  # 例：1000萬以下
+                    max_budget = int(budget.replace("萬以下", ""))
+                elif "以上" in budget:  # 例：3000萬以上
+                    min_budget = int(budget.replace("萬以上", ""))
+                log.info(f"[submit_search] budget 條件 min={min_budget}, max={max_budget}")
+            except Exception as e:
+                log.warning(f"[submit_search] 預算解析失敗: {e}")
+
+        # ✅ Python 再過濾價格
         bubbles = []
         for d in docs:
             data = d.to_dict()
-            log.info(f"[submit_search] doc_id={d.id}, data={data}")
+            price = data.get("price")
+            if price is not None:
+                if min_budget and price < min_budget:
+                    continue
+                if max_budget and price > max_budget:
+                    continue
+
             try:
                 bubbles.append(ft.listing_card(d.id, data))
             except Exception as e:
                 log.error(f"[submit_search] listing_card 失敗 doc_id={d.id}, error={e}")
 
-        # 沒找到 → 回傳文字訊息
+        # 沒找到 → 回傳提示
         if not bubbles:
             line_bot_api.push_message(
                 user_id,
@@ -229,10 +248,7 @@ def submit_search():
             )
         else:
             # 推送 Flex Carousel
-            flex_message = {
-                "type": "carousel",
-                "contents": bubbles[:10],  # 限制最多 10 個
-            }
+            flex_message = {"type": "carousel", "contents": bubbles[:10]}
             line_bot_api.push_message(
                 user_id,
                 FlexSendMessage(alt_text="搜尋結果", contents=flex_message),
@@ -243,6 +259,7 @@ def submit_search():
     except Exception as e:
         log.exception("[submit_search] error")
         return jsonify({"status": "error", "message": str(e)}), 400
+
 
 # -------------------- Debug push --------------------
 @app.route("/debug/push/<user_id>")
