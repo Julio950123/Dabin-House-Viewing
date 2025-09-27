@@ -297,18 +297,19 @@ def submit_form():
 @app.route("/submit_search", methods=["POST"])
 def submit_search():
     try:
+        # 1. 取得表單資料
         data = request.get_json(force=True, silent=True) or request.form.to_dict()
         budget = data.get("budget")
         room   = data.get("room")
         genre  = data.get("genre")
         user_id= data.get("user_id")
 
-        log.info(f"[submit_search] data={data}")
+        log.info(f"[submit_search] 收到 data={data}")
 
         if not user_id:
             return jsonify({"status": "error", "message": "missing user_id"}), 400
 
-        # Firestore 紀錄搜尋條件
+        # 2. 存到 Firestore (search_form)
         db.collection("search_form").document().set({
             "budget": budget,
             "room": room,
@@ -316,8 +317,9 @@ def submit_search():
             "user_id": user_id,
             "created_at": firestore.SERVER_TIMESTAMP
         })
+        log.info("[submit_search] ✅ 搜尋條件已存入 Firestore")
 
-        # 查詢 listings
+        # 3. 查詢 listings
         query = db.collection("listings")
         if budget and "-" in budget:
             try:
@@ -328,36 +330,49 @@ def submit_search():
                     query = query.where("price", "<=", max_budget)
             except Exception as e:
                 log.warning(f"[submit_search] 預算解析錯誤: {e}")
+
         if room and room.isdigit() and int(room) > 0:
             query = query.where("room", "==", int(room))
+
         if genre and genre != "不限":
             query = query.where("genre", "==", genre)
 
         docs = query.limit(5).stream()
+
+        # 4. 組合結果
         results = []
+        bubbles = []
         for doc in docs:
             house = doc.to_dict() or {}
             house["id"] = doc.id
             results.append(house)
-
-        # 👉 推 LINE
-        if results:
             try:
-                bubbles = [ft.listing_card(r["id"], r) for r in results]
-                carousel = {"type": "carousel", "contents": bubbles}
-                line_bot_api.push_message(user_id, FlexSendMessage(alt_text="找到物件", contents=carousel))
+                bubbles.append(ft.listing_card(doc.id, house))
             except Exception as e:
-                log.error(f"[submit_search] push Flex 失敗: {e}")
-        else:
-            line_bot_api.push_message(user_id, TextSendMessage(text="❌ 沒有符合的物件"))
+                log.error(f"[submit_search] listing_card error, id={doc.id}, e={e}")
 
-        # 👉 回瀏覽器 JSON
-        return jsonify({"status": "success", "results": results}), 200
+        # 5. Push 給 LINE Bot
+        if bubbles:
+            carousel = {"type": "carousel", "contents": bubbles}
+            line_bot_api.push_message(
+                user_id,
+                FlexSendMessage(alt_text="找到物件", contents=carousel)
+            )
+        else:
+            line_bot_api.push_message(
+                user_id,
+                TextSendMessage(text="❌ 沒有符合的物件")
+            )
+
+        # 6. 回傳 JSON 給網頁
+        return jsonify({
+            "status": "success",
+            "results": results
+        }), 200
 
     except Exception as e:
         log.exception("[submit_search] error")
         return jsonify({"status": "error", "message": str(e)}), 500
-    
 
     
 # -------------------- 預約賞屋表單 --------------------
