@@ -40,41 +40,42 @@
         <form id="searchForm">
             <!-- 預算 -->
             <div class="mb-3">
-                <label class="form-label">預算</label>
-                <select name="budget" class="form-select" required>
-                    <option value="">請選擇預算</option>
-                    <option value="0-1000">1000萬以下</option>
-                    <option value="1000-1500">1000-1500萬</option>
-                    <option value="1500-2000">1500-2000萬</option>
-                    <option value="2000-2500">2000-2500萬</option>
-                    <option value="2500-3000">2500-3000萬</option>
-                    <option value="3000-99999">3000萬以上</option>
-                    <option value="0-99999">不限</option>
-                </select>
+            <label class="form-label">預算</label>
+            <select id="budget" name="budget" class="form-select" required>
+                <option value="">請選擇預算</option>
+                <option value="0-1000">1000萬以下</option>
+                <option value="1000-1500">1000-1500萬</option>
+                <option value="1500-2000">1500-2000萬</option>
+                <option value="2000-2500">2000-2500萬</option>
+                <option value="2500-3000">2500-3000萬</option>
+                <option value="3000-99999">3000萬以上</option>
+                <option value="0-99999">不限</option>
+            </select>
             </div>
 
             <!-- 格局 -->
             <div class="mb-3">
-                <label class="form-label">格局</label>
-                <select name="room" class="form-select" required>
-                    <option value="">請選擇格局</option>
-                    <option value="0">不限</option>
-                    <option value="1">1房</option>
-                    <option value="2">2房</option>
-                    <option value="3">3房</option>
-                    <option value="4">4房</option>
-                </select>
+            <label class="form-label">格局</label>
+            <select id="room" name="room" class="form-select" required>
+                <option value="">請選擇格局</option>
+                <option value="0">不限</option>
+                <option value="1">1房</option>
+                <option value="2">2房</option>
+                <option value="3">3房</option>
+                <option value="4">4房</option>
+            </select>
             </div>
 
-            <!-- 類型 -->
+            <!-- 型態 -->
             <div class="mb-3">
-                <label class="form-label">型態</label>
-                <select name="genre" class="form-select" required>
-                    <option value="">請選擇型態</option>
-                    <option value="電梯大樓">電梯大樓</option>
-                    <option value="公寓">公寓</option>
-                    <option value="透天厝">透天厝</option>
-                </select>
+            <label class="form-label">型態</label>
+            <select id="genre" name="genre" class="form-select" required>
+                <option value="">請選擇型態</option>
+                <option value="電梯大樓">電梯大樓</option>
+                <option value="公寓">公寓</option>
+                <option value="透天厝">透天厝</option>
+                <option value="不限">不限</option>
+            </select>
             </div>
 
             <!-- 隱藏 user_id -->
