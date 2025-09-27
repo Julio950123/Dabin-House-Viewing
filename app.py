@@ -209,7 +209,7 @@ def submit_search():
         line_bot_api.push_message(user_id, FlexSendMessage(alt_text="搜尋條件", contents=search_card))
 
         # 🔹 繼續查詢 houses 集合
-        query = db.collection("houses")
+        query = db.collection("listings")
         if budget and budget != "不限":
             try:
                 max_budget = budget.replace("萬", "")
