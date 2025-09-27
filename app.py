@@ -174,17 +174,22 @@ def submit_search():
         log.info(f"[submit_search] user_id={user_id}, budget={budget}, room={room}, genre={genre}")
 
         if not user_id:
-            return jsonify({"status": "error", "message": "missing user_id"}), 400
+            return jsonify({"status": "error", "message": "❌ 缺少 user_id"}), 400
 
         # Firestore 查詢
         query = db.collection("houses")
         if budget and budget != "不限":
-            max_budget = budget.replace("萬", "")
-            if "-" in max_budget:
-                max_budget = int(max_budget.split("-")[-1])
-            elif "以上" in max_budget:
-                max_budget = 9999999
-            query = query.where("budget", "<=", int(max_budget))
+            try:
+                max_budget = budget.replace("萬", "")
+                if "-" in max_budget:
+                    max_budget = int(max_budget.split("-")[-1])
+                elif "以上" in max_budget:
+                    max_budget = 9999999
+                query = query.where("budget", "<=", int(max_budget))
+            except Exception as e:
+                log.error(f"[submit_search] 預算轉換失敗: {e}")
+                return jsonify({"status": "error", "message": f"預算格式錯誤: {budget}"}), 400
+
         if room:
             query = query.where("room", "==", room)
         if genre and genre != "不限":
@@ -196,11 +201,12 @@ def submit_search():
         for doc in docs:
             try:
                 data = doc.to_dict()
-                bubble = listing_card(doc.id, data)   # ⚠️ 這裡最容易出錯
+                bubble = listing_card(doc.id, data)
                 if bubble:
                     bubbles.append(bubble)
             except Exception as e:
-                log.exception(f"[submit_search] 物件 {doc.id} 產生卡片失敗: {e}")
+                log.exception(f"[submit_search] 物件 {doc.id} 產生 Flex 失敗")
+                return jsonify({"status": "error", "message": f"物件 {doc.id} 產生卡片失敗: {str(e)}"}), 500
 
         if not bubbles:
             no_result = {
@@ -212,19 +218,19 @@ def submit_search():
                 }
             }
             line_bot_api.push_message(user_id, FlexSendMessage(alt_text="搜尋結果", contents=no_result))
+            return jsonify({"status": "ok", "count": 0}), 200
         else:
             carousel = {"type": "carousel", "contents": bubbles[:10]}
             line_bot_api.push_message(user_id, FlexSendMessage(alt_text="搜尋結果", contents=carousel))
-
-        return jsonify({"status": "ok"}), 200
+            return jsonify({"status": "ok", "count": len(bubbles)}), 200
 
     except LineBotApiError as e:
         log.exception("[submit_search] LINE API 錯誤")
-        return jsonify({"status": "error", "message": str(e)}), 400
+        return jsonify({"status": "error", "message": f"LINE API 錯誤: {e}"}), 500
     except Exception as e:
-        log.exception("[submit_search] error")
+        log.exception("[submit_search] 其他錯誤")
         return jsonify({"status": "error", "message": str(e)}), 500
-
+    
 # -------------------- Debug push --------------------
 @app.route("/debug/push/<user_id>")
 def debug_push(user_id):

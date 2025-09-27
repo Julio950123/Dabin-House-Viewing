@@ -1,5 +1,5 @@
-// ⚠️ 換成你的搜尋專用 LIFF ID
-const LIFF_ID = "你的_LIFF_ID";  
+// ⚠️ 換成你的 LIFF ID
+const LIFF_ID = "2007720984-Wdoapz3B";  
 
 // 初始化 LIFF
 async function initLiff() {
@@ -11,13 +11,10 @@ async function initLiff() {
             return;
         }
 
-        // 取得 LINE 使用者 ID
+        // 取得使用者 profile
         const profile = await liff.getProfile();
-        const userIdInput = document.getElementById("user_id");
-        if (userIdInput) {
-            userIdInput.value = profile.userId;
-        }
-        console.log("✅ 取得 user_id:", profile.userId);
+        document.getElementById("user_id").value = profile.userId;
+        console.log("✅ 抓到 user_id:", profile.userId);
 
     } catch (error) {
         console.error("❌ LIFF 初始化失敗:", error);
@@ -25,49 +22,36 @@ async function initLiff() {
     }
 }
 
-// 綁定表單送出事件
+// 綁定表單送出
 function bindFormSubmit() {
     const form = document.getElementById("searchForm");
     if (!form) return;
 
-    form.addEventListener("submit", async function (e) {
+    form.addEventListener("submit", async function(e) {
         e.preventDefault();
 
-        // 取表單值
-        const formData = new FormData(form);
+        const formData = new FormData(this);
         const payload = Object.fromEntries(formData.entries());
 
         try {
-            let res = await fetch("/submit_search", {
+            const res = await fetch("/submit_search", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
             });
 
-            const resultDiv = document.getElementById("results");
-            resultDiv.innerHTML = "";
+            const data = await res.json().catch(() => ({}));
 
-            if (res.ok) {
-                const data = await res.json();
-
-                if (data.status === "ok" && data.results.length > 0) {
-                    data.results.forEach(h => {
-                        resultDiv.innerHTML += `
-                            <div class="result-card">
-                                <h5>${h.title || "未命名物件"}</h5>
-                                <p>💰 ${h.budget} 萬 ｜ 🛏 ${h.room} ｜ 🏢 ${h.genre}</p>
-                            </div>
-                        `;
-                    });
-                } else {
-                    resultDiv.innerHTML = "<p class='text-danger'>沒有符合條件的物件</p>";
-                }
+            if (res.ok && data.status === "ok") {
+                console.log("✅ 搜尋成功:", data);
+                liff.closeWindow();  // 成功就關閉 LIFF 視窗
             } else {
-                alert("搜尋失敗，請稍後再試");
+                console.error("❌ 搜尋失敗:", data);
+                alert("❌ " + (data.message || "送出失敗，請稍後再試"));
             }
         } catch (err) {
-            console.error("❌ 搜尋錯誤:", err);
-            alert("搜尋失敗，請稍後再試");
+            console.error("⚠️ 網路錯誤:", err);
+            alert("⚠️ 網路錯誤：" + err.message);
         }
     });
 }
