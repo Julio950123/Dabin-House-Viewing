@@ -176,7 +176,7 @@ def submit_search():
         if not user_id:
             return jsonify({"status": "error", "message": "❌ 缺少 user_id"}), 400
 
-        # 🔹 產生「搜尋條件卡」
+        # 🔹 先推送「搜尋條件卡」
         search_card = {
             "type": "bubble",
             "size": "mega",
@@ -193,19 +193,67 @@ def submit_search():
                 ]
             }
         }
-
-        # 推送回 LINE
         line_bot_api.push_message(
             user_id,
             FlexSendMessage(alt_text="搜尋條件", contents=search_card)
         )
+
+        # 🔹 Firestore 查詢
+        query = db.collection("houses")
+        if budget and budget != "不限":
+            try:
+                max_budget = budget.replace("萬", "")
+                if "-" in max_budget:
+                    max_budget = int(max_budget.split("-")[-1])
+                elif "以上" in max_budget:
+                    max_budget = 9999999
+                query = query.where("budget", "<=", int(max_budget))
+            except Exception as e:
+                log.error(f"[submit_search] 預算格式錯誤: {e}")
+
+        if room and room != "未填":
+            query = query.where("room", "==", room)
+        if genre and genre != "不限" and genre != "未填":
+            query = query.where("genre", "==", genre)
+
+        docs = list(query.stream())
+        bubbles = []
+
+        for doc in docs:
+            try:
+                data = doc.to_dict()
+                bubble = listing_card(doc.id, data)  # ✅ 你 flex_templates 裡的函式
+                if bubble:
+                    bubbles.append(bubble)
+            except Exception as e:
+                log.exception(f"[submit_search] 物件 {doc.id} 產生卡片失敗: {e}")
+
+        # 🔹 推送搜尋結果
+        if not bubbles:
+            no_result = {
+                "type": "bubble",
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [{"type": "text", "text": "❌ 沒有符合條件的物件"}]
+                }
+            }
+            line_bot_api.push_message(
+                user_id,
+                FlexSendMessage(alt_text="搜尋結果", contents=no_result)
+            )
+        else:
+            carousel = {"type": "carousel", "contents": bubbles[:10]}
+            line_bot_api.push_message(
+                user_id,
+                FlexSendMessage(alt_text="搜尋結果", contents=carousel)
+            )
 
         return jsonify({"status": "ok"}), 200
 
     except Exception as e:
         log.exception("[submit_search] error")
         return jsonify({"status": "error", "message": str(e)}), 500
-    
 # -------------------- Debug push --------------------
 @app.route("/debug/push/<user_id>")
 def debug_push(user_id):
