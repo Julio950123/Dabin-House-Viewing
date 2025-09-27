@@ -191,7 +191,16 @@ def submit_search():
             query = query.where("genre", "==", genre)
 
         docs = list(query.stream())
-        bubbles = [listing_card(doc.id, doc.to_dict()) for doc in docs]
+        bubbles = []
+
+        for doc in docs:
+            try:
+                data = doc.to_dict()
+                bubble = listing_card(doc.id, data)   # ⚠️ 這裡最容易出錯
+                if bubble:
+                    bubbles.append(bubble)
+            except Exception as e:
+                log.exception(f"[submit_search] 物件 {doc.id} 產生卡片失敗: {e}")
 
         if not bubbles:
             no_result = {
