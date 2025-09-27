@@ -1,7 +1,5 @@
-// ⚠️ 換成你的 LIFF ID
 const LIFF_ID = "2007720984-Wdoapz3B";  
 
-// 初始化 LIFF
 async function initLiff() {
     try {
         await liff.init({ liffId: LIFF_ID });
@@ -11,7 +9,6 @@ async function initLiff() {
             return;
         }
 
-        // 取得使用者 profile
         const profile = await liff.getProfile();
         document.getElementById("user_id").value = profile.userId;
         console.log("✅ 抓到 user_id:", profile.userId);
@@ -22,7 +19,6 @@ async function initLiff() {
     }
 }
 
-// 綁定表單送出
 function bindFormSubmit() {
     const form = document.getElementById("searchForm");
     if (!form) return;
@@ -40,14 +36,21 @@ function bindFormSubmit() {
                 body: JSON.stringify(payload)
             });
 
-            const data = await res.json().catch(() => ({}));
+            const text = await res.text();   // ⚠️ 先讀純文字
+            console.log("🔍 原始回傳:", text);
+
+            let data = {};
+            try {
+                data = JSON.parse(text);
+            } catch {
+                data = { message: text };
+            }
 
             if (res.ok && data.status === "ok") {
-                console.log("✅ 搜尋成功:", data);
-                liff.closeWindow();  // 成功就關閉 LIFF 視窗
+                alert("✅ 成功：" + JSON.stringify(data));
+                liff.closeWindow();
             } else {
-                console.error("❌ 搜尋失敗:", data);
-                alert("❌ " + (data.message || "送出失敗，請稍後再試"));
+                alert("❌ 錯誤：" + (data.message || "未知錯誤") + "\n原始回傳: " + text);
             }
         } catch (err) {
             console.error("⚠️ 網路錯誤:", err);
@@ -56,7 +59,6 @@ function bindFormSubmit() {
     });
 }
 
-// 啟動
 document.addEventListener("DOMContentLoaded", () => {
     initLiff();
     bindFormSubmit();
