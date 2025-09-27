@@ -43,7 +43,7 @@
       <!-- 預算 -->
       <div class="mb-3">
         <label class="form-label">預算</label>
-        <select name="budget" class="form-select" required>
+        <select id="budget" name="budget" class="form-select" required>
           <option value="">請選擇預算</option>
           <option value="0-1000">1000萬以下</option>
           <option value="1000-1500">1000-1500萬</option>
@@ -58,7 +58,7 @@
       <!-- 格局 -->
       <div class="mb-3">
         <label class="form-label">格局</label>
-        <select name="room" class="form-select" required>
+        <select id="room" name="room" class="form-select" required>
           <option value="">請選擇格局</option>
           <option value="0">不限</option>
           <option value="1">1房</option>
@@ -68,10 +68,10 @@
         </select>
       </div>
 
-      <!-- 類型 -->
+      <!-- 型態 -->
       <div class="mb-3">
         <label class="form-label">型態</label>
-        <select name="genre" class="form-select" required>
+        <select id="genre" name="genre" class="form-select" required>
           <option value="">請選擇型態</option>
           <option value="電梯大樓">電梯大樓</option>
           <option value="公寓">公寓</option>

@@ -334,6 +334,8 @@ def submit_search():
         if room and room.isdigit() and int(room) > 0:
             query = query.where("room", "==", int(room))
 
+        if genre and genre != "不限":
+            query = query.where("genre", "==", genre)
 
         docs = query.limit(5).stream()
 
