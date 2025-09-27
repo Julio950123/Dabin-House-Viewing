@@ -1,30 +1,145 @@
-document.getElementById("searchForm").addEventListener("submit", async function(e) {
-  e.preventDefault();
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>搜尋您的理想好屋</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f9f9f9; }
+    .form-container {
+      max-width: 480px;
+      margin: 40px auto;
+      background: #fff;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    h2 { text-align: center; margin-bottom: 25px; font-weight: bold; color: #333; }
+    button { transition: all 0.2s ease-in-out; }
+    button:hover { transform: scale(1.03); }
+    .btn-success {
+      background-color: #EB941E !important;
+      border-color: #EB941E !important;
+    }
+    .btn-success:hover {
+      background-color: #d47f15 !important;
+      border-color: #d47f15 !important;
+    }
+    #resultBox {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 8px;
+      background: #f4f4f4;
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="form-container">
+    <h2>搜尋您的理想好屋</h2>
+    <form id="searchForm">
+      <!-- 預算 -->
+      <div class="mb-3">
+        <label class="form-label">預算</label>
+        <select name="budget" class="form-select" required>
+          <option value="">請選擇預算</option>
+          <option value="0-1000">1000萬以下</option>
+          <option value="1000-1500">1000-1500萬</option>
+          <option value="1500-2000">1500-2000萬</option>
+          <option value="2000-2500">2000-2500萬</option>
+          <option value="2500-3000">2500-3000萬</option>
+          <option value="3000-99999">3000萬以上</option>
+          <option value="0-99999">不限</option>
+        </select>
+      </div>
 
-  const data = {
-    user_id: document.getElementById("user_id").value,
-    budget: document.getElementById("budget").value,
-    room: document.getElementById("room").value,
-    genre: document.getElementById("genre").value
-  };
+      <!-- 格局 -->
+      <div class="mb-3">
+        <label class="form-label">格局</label>
+        <select name="room" class="form-select" required>
+          <option value="">請選擇格局</option>
+          <option value="0">不限</option>
+          <option value="1">1房</option>
+          <option value="2">2房</option>
+          <option value="3">3房</option>
+          <option value="4">4房</option>
+        </select>
+      </div>
 
-  try {
-    const res = await fetch("/submit_search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data)
+      <!-- 類型 -->
+      <div class="mb-3">
+        <label class="form-label">型態</label>
+        <select name="genre" class="form-select" required>
+          <option value="">請選擇型態</option>
+          <option value="電梯大樓">電梯大樓</option>
+          <option value="公寓">公寓</option>
+          <option value="透天厝">透天厝</option>
+          <option value="不限">不限</option>
+        </select>
+      </div>
+
+      <!-- 隱藏 user_id -->
+      <input type="hidden" name="user_id" id="user_id">
+
+      <!-- 送出按鈕 -->
+      <button type="submit" class="btn btn-success w-100">送出</button>
+    </form>
+
+    <!-- 顯示結果 -->
+    <div id="resultBox" class="d-none"></div>
+  </div>
+
+  <!-- LIFF SDK -->
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script>
+    const LIFF_ID = "2007720984-Wdoapz3B"; // ⚠️ 換成你的 LIFF ID
+
+    async function initLiff() {
+      try {
+        await liff.init({ liffId: LIFF_ID });
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return;
+        }
+        const profile = await liff.getProfile();
+        document.getElementById("user_id").value = profile.userId;
+        console.log("✅ 取得 user_id:", profile.userId);
+      } catch (error) {
+        console.error("❌ LIFF 初始化失敗:", error);
+        alert("⚠️ LIFF 初始化失敗，請重新開啟連結");
+      }
+    }
+
+    document.getElementById("searchForm").addEventListener("submit", async function(e) {
+      e.preventDefault();
+
+      const formData = new FormData(this);
+      const payload = Object.fromEntries(formData.entries());
+      console.log("📤 準備送出:", payload);
+
+      try {
+        let res = await fetch("/submit_search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        let data = await res.json();
+        console.log("✅ 後端回傳:", data);
+
+        const resultBox = document.getElementById("resultBox");
+        resultBox.classList.remove("d-none");
+        resultBox.textContent = JSON.stringify(data, null, 2); // 漂亮格式化 JSON
+
+      } catch (err) {
+        console.error("❌ 表單送出錯誤:", err);
+        alert("送出失敗，錯誤: " + err);
+      }
     });
 
-    const result = await res.json();
-    if (result.status === "success") {
-      await liff.sendMessages([
-        { type: "text", text: "🔍 搜尋完成，請查看結果！" }
-      ]);
-      liff.closeWindow();
-    } else {
-      alert("送出失敗：" + result.message);
-    }
-  } catch (err) {
-    alert("發生錯誤：" + err);
-  }
-});
+    initLiff();
+  </script>
+</body>
+</html>
