@@ -297,20 +297,40 @@ def submit_form():
 @app.route("/submit_search", methods=["POST"])
 def submit_search():
     try:
-        # 嘗試解析 JSON 或表單
         data = request.get_json(force=True, silent=True) or request.form.to_dict()
-        
-        # Debug log
-        log.info(f"[submit_search] 測試收到資料: {data}")
+        budget = data.get("budget")
+        room   = data.get("room")
+        genre  = data.get("genre")
+        user_id= data.get("user_id")
 
-        # 回傳 echo 給前端確認
+        log.info(f"[submit_search] 收到: {data}")
+
+        if not user_id:
+            return jsonify({"status": "error", "message": "missing user_id"}), 400
+
+        # Firestore 紀錄搜尋條件
+        db.collection("search_form").document().set({
+            "budget": budget,
+            "room": room,
+            "genre": genre,
+            "user_id": user_id,
+            "created_at": firestore.SERVER_TIMESTAMP
+        })
+        log.info("[submit_search] ✅ Firestore 已寫入")
+
+        # 回傳 JSON 給前端
         return jsonify({
-            "status": "ok",
-            "echo": data
+            "status": "success",
+            "echo": {
+                "budget": budget,
+                "room": room,
+                "genre": genre,
+                "user_id": user_id
+            }
         }), 200
 
     except Exception as e:
-        log.exception("[submit_search] 測試錯誤")
+        log.exception("[submit_search] error")
         return jsonify({"status": "error", "message": str(e)}), 500
 
     
