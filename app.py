@@ -293,66 +293,97 @@ def submit_form():
         log.exception("[submit_form] error")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# -------------------- 查詢物件 --------------------
+# -------------------- 搜尋表單提交 --------------------
 @app.route("/submit_search", methods=["POST"])
 def submit_search():
     try:
         data = request.get_json(force=True, silent=True) or request.form.to_dict()
-        budget = data.get("budget")
-        room   = data.get("room")
-        genre  = data.get("genre")
-        user_id= data.get("user_id")
+        user_id = data.get("user_id")
+        budget  = data.get("budget", "未填")
+        room    = data.get("room", "未填")
+        genre   = data.get("genre", "未填")
 
-        log.info(f"[submit_search] data={data}")
+        log.info(f"[submit_search] user_id={user_id}, budget={budget}, room={room}, genre={genre}")
 
         if not user_id:
-            return jsonify({"status": "error", "message": "missing user_id"}), 400
+            return jsonify({"status": "error", "message": "❌ 缺少 user_id"}), 400
 
-        # Firestore 紀錄搜尋條件
-        db.collection("search_form").document().set({
+        # ✅ 存到 search_form 集合（以 user_id 為文件 ID）
+        doc_ref = db.collection("search_form").document(user_id)
+        payload = {
+            "user_id": user_id,
             "budget": budget,
             "room": room,
             "genre": genre,
-            "user_id": user_id,
-            "created_at": firestore.SERVER_TIMESTAMP
-        })
+            "updated_at": firestore.SERVER_TIMESTAMP
+        }
+        doc_ref.set(payload, merge=True)
+        log.info("[submit_search] ✅ 已寫入 search_form")
 
-        # 查詢 listings
+        # 🔹 回傳搜尋條件卡
+        search_card = {
+            "type": "bubble",
+            "size": "mega",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "md",
+                "contents": [
+                    {"type": "text", "text": "🔎 搜尋條件", "weight": "bold", "size": "lg", "color": "#EB941E"},
+                    {"type": "separator", "margin": "md"},
+                    {"type": "text", "text": f"💰 預算：{budget}", "wrap": True},
+                    {"type": "text", "text": f"🏠 格局：{room}", "wrap": True},
+                    {"type": "text", "text": f"🏢 型態：{genre}", "wrap": True}
+                ]
+            }
+        }
+        line_bot_api.push_message(user_id, FlexSendMessage(alt_text="搜尋條件", contents=search_card))
+
+        # 🔹 繼續查詢 houses 集合
         query = db.collection("listings")
-        if budget and "-" in budget:
+        if budget and budget != "不限":
             try:
-                min_budget, max_budget = map(int, budget.split("-"))
-                if min_budget > 0:
-                    query = query.where("price", ">=", min_budget)
-                if max_budget < 99999:
-                    query = query.where("price", "<=", max_budget)
+                max_budget = budget.replace("萬", "")
+                if "-" in max_budget:
+                    max_budget = int(max_budget.split("-")[-1])
+                elif "以上" in max_budget:
+                    max_budget = 9999999
+                query = query.where("budget", "<=", int(max_budget))
             except Exception as e:
-                log.warning(f"[submit_search] 預算解析錯誤: {e}")
-        if room and room.isdigit() and int(room) > 0:
-            query = query.where("room", "==", int(room))
-        if genre and genre != "不限":
+                log.error(f"[submit_search] 預算格式錯誤: {e}")
+
+        if room and room != "未填":
+            query = query.where("room", "==", room)
+        if genre and genre not in ["未填", "不限"]:
             query = query.where("genre", "==", genre)
 
-        docs = query.limit(5).stream()
-        results = []
+        docs = list(query.stream())
+        bubbles = []
+
         for doc in docs:
-            house = doc.to_dict() or {}
-            house["id"] = doc.id
-            results.append(house)
-
-        # 👉 推 LINE
-        if results:
             try:
-                bubbles = [ft.listing_card(r["id"], r) for r in results]
-                carousel = {"type": "carousel", "contents": bubbles}
-                line_bot_api.push_message(user_id, FlexSendMessage(alt_text="找到物件", contents=carousel))
+                house = doc.to_dict()
+                bubble = listing_card(doc.id, house)
+                if bubble:
+                    bubbles.append(bubble)
             except Exception as e:
-                log.error(f"[submit_search] push Flex 失敗: {e}")
-        else:
-            line_bot_api.push_message(user_id, TextSendMessage(text="❌ 沒有符合的物件"))
+                log.exception(f"[submit_search] 物件 {doc.id} 產生卡片失敗: {e}")
 
-        # 👉 回瀏覽器 JSON
-        return jsonify({"status": "success", "results": results}), 200
+        if not bubbles:
+            no_result = {
+                "type": "bubble",
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [{"type": "text", "text": "❌ 沒有符合條件的物件"}]
+                }
+            }
+            line_bot_api.push_message(user_id, FlexSendMessage(alt_text="搜尋結果", contents=no_result))
+        else:
+            carousel = {"type": "carousel", "contents": bubbles[:10]}
+            line_bot_api.push_message(user_id, FlexSendMessage(alt_text="搜尋結果", contents=carousel))
+
+        return jsonify({"status": "ok"}), 200
 
     except Exception as e:
         log.exception("[submit_search] error")
