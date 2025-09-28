@@ -393,6 +393,15 @@ def submit_search():
         log.exception("[submit_search] error")
         return jsonify({"status": "error", "message": str(e)}), 400
 
+# -------------------- 時段對照表 --------------------
+TIMESLOT_MAP = {
+    "weekday-morning": "平日早上",
+    "weekday-afternoon": "平日下午",
+    "weekday-evening": "平日晚上",
+    "weekend-morning": "假日早上",
+    "weekend-afternoon": "假日下午",
+    "weekend-evening": "假日晚上"
+}
 
 # -------------------- 預約賞屋表單 --------------------
 @app.route("/api/booking", methods=["POST"])
@@ -413,6 +422,9 @@ def api_booking():
             log.error("[api_booking] 缺少 userId")
             return jsonify({"status": "error", "message": "missing userId"}), 400
 
+        # ---------------- 時段轉中文 ----------------
+        timeslot_cn = TIMESLOT_MAP.get(timeslot, timeslot)
+
         # ---------------- Firestore ----------------
         db.collection("bookings").document().set({
             "userId": user_id,
@@ -420,6 +432,7 @@ def api_booking():
             "name": name,
             "phone": phone,
             "timeslot": timeslot,
+            "timeslot_cn": timeslot_cn,
             "houseId": house_id,
             "houseTitle": house_title,
             "created_at": firestore.SERVER_TIMESTAMP
@@ -439,7 +452,7 @@ def api_booking():
                     {"type": "text", "text": f"物件：{house_title}", "wrap": True},
                     {"type": "text", "text": f"姓名：{name}", "wrap": True},
                     {"type": "text", "text": f"電話：{phone}", "wrap": True},
-                    {"type": "text", "text": f"時段：{timeslot}", "wrap": True},
+                    {"type": "text", "text": f"時段：{timeslot_cn}", "wrap": True},
                     {"type": "separator", "margin": "md"},
                     {"type": "text", "text": "我們將盡快與您聯繫 🙏", "align": "center", "color": "#555555", "size": "sm"}
                 ]
@@ -460,11 +473,14 @@ def api_booking():
         try:
             agent_id = os.getenv("AGENT_LINE_USER_ID")  # 在 .env.local / .env.prod 裡設定
             if agent_id:
-                agent_message = f"📢 有人預約囉！\n\n🏠 物件：{house_title}\n👤 姓名：{name}\n📞 電話：{phone}\n🕒 時段：{timeslot}"
-                line_bot_api.push_message(
-                    agent_id,
-                    TextSendMessage(text=agent_message)
+                agent_message = (
+                    f"📢 有人預約囉！\n\n"
+                    f"🏠 物件：{house_title}\n"
+                    f"👤 姓名：{name}\n"
+                    f"📞 電話：{phone}\n"
+                    f"🕒 時段：{timeslot_cn}"
                 )
+                line_bot_api.push_message(agent_id, TextSendMessage(text=agent_message))
                 log.info(f"[api_booking] ✅ 已通知房仲 agent_id={agent_id}")
             else:
                 log.warning("[api_booking] ⚠️ 沒有設定 AGENT_LINE_USER_ID")
@@ -476,7 +492,8 @@ def api_booking():
     except Exception as e:
         log.exception("[api_booking] error")
         return jsonify({"status": "error", "message": str(e)}), 500
-    
+
+
 # -------------------- Debug: 顯示房仲 ID --------------------
 @app.route("/debug/agent")
 def debug_agent():
