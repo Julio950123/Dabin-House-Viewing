@@ -44,9 +44,11 @@ LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET", "")
 # LIFF Apps
 LIFF_ID_SUBSCRIBE = os.getenv("LIFF_ID_SUBSCRIBE", "")
 LIFF_ID_BOOKING   = os.getenv("LIFF_ID_BOOKING", "")
+LIFF_ID_SHARE     = os.getenv("LIFF_ID_SHARE", "")
 
 LIFF_URL_SUBSCRIBE = f"https://liff.line.me/{LIFF_ID_SUBSCRIBE}"
 LIFF_URL_BOOKING   = f"https://liff.line.me/{LIFF_ID_BOOKING}"
+LIFF_URL_SHARE     = f"https://liff.line.me/{LIFF_ID_SHARE}"
 
 AGENT_LINE_USER_ID = os.getenv("AGENT_LINE_USER_ID", "")
 
@@ -97,7 +99,7 @@ def show_search_form():
 @app.route("/share")
 def share_page():
     """LIFF 分享頁面"""
-    return render_template("share.html")
+    return render_template("share.html", liff_id=LIFF_ID_SHARE)
 
 @app.route("/booking")
 def booking():

@@ -1,12 +1,11 @@
-// 🔹 LIFF ID（請確認與 LINE Developers 後台一致）
-const LIFF_ID = "2007720984-L3DXgr6m";
-
-// 🔹 Firebase Config（請換成你專案的 apiKey）
+// 🔹 Firebase Config
 const firebaseConfig = {
-  apiKey: "AIzaSyA5dcyj0_2GYBh2KZ74Ny30UeYUJz9tycU",
+  apiKey: "你的-APIKEY", // ⚠️ 必填，換成 Firebase Console 裡的
   authDomain: "dabin-house-viewing-2c4f0.firebaseapp.com",
   projectId: "dabin-house-viewing-2c4f0"
 };
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
 // 取得網址參數
 function getQueryParam(name) {
@@ -15,7 +14,7 @@ function getQueryParam(name) {
 
 async function main() {
   try {
-    // 🔹 初始化 LIFF
+    // 初始化 LIFF
     await liff.init({ liffId: LIFF_ID });
     console.log("✅ LIFF 初始化成功");
 
@@ -24,14 +23,14 @@ async function main() {
       return;
     }
 
-    // 🔹 測試 doc_id 參數
+    // 取得 doc_id
     const docId = getQueryParam("doc_id");
     if (!docId) {
       document.getElementById("status").innerText = "❌ 缺少 doc_id 參數";
       return;
     }
 
-    // 🔹 Firestore 取物件資料
+    // 從 Firestore 抓資料
     const snap = await db.collection("listings").doc(docId).get();
     if (!snap.exists) {
       document.getElementById("status").innerText = "❌ 找不到物件資料";
@@ -40,7 +39,7 @@ async function main() {
 
     const data = snap.data();
 
-    // 🔹 Flex Message
+    // Flex Message
     const flexMessage = {
       type: "flex",
       altText: `分享物件：${data.title || "好宅"}`,
@@ -72,7 +71,7 @@ async function main() {
             {
               type: "button",
               style: "primary",
-              color: "#F5A627", 
+              color: "#F5A627",
               action: {
                 type: "uri",
                 label: "物件詳情請至LINE@搜尋",
@@ -84,16 +83,16 @@ async function main() {
       }
     };
 
-    // 🔹 分享到聊天室
+    // 分享
     document.getElementById("status").innerText = "載入完成，正在開啟分享...";
     await liff.shareTargetPicker([flexMessage]);
     setTimeout(() => liff.closeWindow(), 1200);
 
   } catch (err) {
     console.error("❌ LIFF 初始化失敗:", err);
-    document.getElementById("status").innerText = "⚠️ LIFF 初始化失敗，請重新開啟連結";
+    document.getElementById("status").innerText =
+      "⚠️ LIFF 初始化失敗：" + JSON.stringify(err);
   }
 }
 
-// 啟動
 main();
