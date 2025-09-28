@@ -5,7 +5,7 @@ import warnings
 import time
 import threading
 from collections import OrderedDict
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, quote_plus
 
 from flask import Flask, request, abort, render_template, jsonify
 
@@ -41,12 +41,12 @@ else:
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET", "")
 
-# LIFF Apps
+# ✅ 分成兩組 LIFF（追蹤物件 / 預約賞屋）
 LIFF_ID_SUBSCRIBE = os.getenv("LIFF_ID_SUBSCRIBE", "")
 LIFF_ID_BOOKING   = os.getenv("LIFF_ID_BOOKING", "")
 
-LIFF_URL_SUBSCRIBE = f"https://liff.line.me/{LIFF_ID_SUBSCRIBE}"
-LIFF_URL_BOOKING   = f"https://liff.line.me/{LIFF_ID_BOOKING}"
+LIFF_URL_SUBSCRIBE = f"https://liff.line.me/{LIFF_ID_SUBSCRIBE}" if LIFF_ID_SUBSCRIBE else ""
+LIFF_URL_BOOKING   = f"https://liff.line.me/{LIFF_ID_BOOKING}"   if LIFF_ID_BOOKING   else ""
 
 if not LINE_CHANNEL_ACCESS_TOKEN or not LINE_CHANNEL_SECRET:
     raise ValueError("❌ 請先設定 LINE_CHANNEL_ACCESS_TOKEN 與 LINE_CHANNEL_SECRET 環境變數")
@@ -131,7 +131,7 @@ def share_page():
 def booking():
     return render_template("booking_form.html")
 
-# -------------------- 追蹤表單提交 --------------------
+# -------------------- 追蹤物件表單提交 --------------------
 @app.route("/submit_form", methods=["POST"])
 def submit_form():
     try:
@@ -161,12 +161,11 @@ def submit_form():
         log.exception("[submit_form] error")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
 # -------------------- 查詢物件 --------------------
 @app.route("/submit_search", methods=["POST"])
 def submit_search():
     try:
-        data = request.get_json(force=True)
+        data = request.get_json(force=True, silent=True) or request.form.to_dict()
         user_id = data.get("user_id")
         budget  = data.get("budget")
         room    = data.get("room")
@@ -179,40 +178,29 @@ def submit_search():
 
         # Firestore 查 listings 集合
         query = db.collection("listings")
-
-        # ✅ 格局條件 (轉 int，比對 Firestore 的 room:int)
-        if room and room != "0":  # 0 = 不限
+        if room and room != "0":  
             query = query.where("room", "==", int(room))
-            log.info(f"[submit_search] 加入 room 條件 == {room}")
-
-        # ✅ 型態條件（必填）
         if genre:
             query = query.where("genre", "==", genre)
-            log.info(f"[submit_search] 加入 genre 條件 == {genre}")
 
-        # 先拿 Firestore 查詢結果
         docs = list(query.stream())
         log.info(f"[submit_search] 找到 {len(docs)} 筆 listings (未過濾價格)")
 
-        for d in docs:
-            log.info(f"[submit_search] doc_id={d.id}, price={d.to_dict().get('price')}, room={d.to_dict().get('room')}, genre={d.to_dict().get('genre')}")
-
-        # ✅ 預算範圍解析
+        # 預算範圍解析
         min_budget, max_budget = None, None
         if budget:
             try:
-                if "-" in budget:  # 例：1000-1500
+                if "-" in budget:
                     parts = budget.replace("萬", "").split("-")
                     min_budget, max_budget = int(parts[0]), int(parts[1])
-                elif "以下" in budget:  # 例：1000萬以下
+                elif "以下" in budget:
                     max_budget = int(budget.replace("萬以下", ""))
-                elif "以上" in budget:  # 例：3000萬以上
+                elif "以上" in budget:
                     min_budget = int(budget.replace("萬以上", ""))
-                log.info(f"[submit_search] budget 條件 min={min_budget}, max={max_budget}")
             except Exception as e:
                 log.warning(f"[submit_search] 預算解析失敗: {e}")
 
-        # ✅ Python 再過濾價格
+        # Python 過濾價格
         bubbles = []
         for d in docs:
             data = d.to_dict()
@@ -222,37 +210,16 @@ def submit_search():
                     continue
                 if max_budget and price > max_budget:
                     continue
-
             try:
                 bubbles.append(ft.listing_card(d.id, data))
             except Exception as e:
                 log.error(f"[submit_search] listing_card 失敗 doc_id={d.id}, error={e}")
 
-        # 沒找到 → 回傳提示
         if not bubbles:
-            line_bot_api.push_message(
-                user_id,
-                FlexSendMessage(
-                    alt_text="搜尋結果",
-                    contents={
-                        "type": "bubble",
-                        "body": {
-                            "type": "box",
-                            "layout": "vertical",
-                            "contents": [
-                                {"type": "text", "text": "❌ 沒有符合條件的物件"}
-                            ]
-                        },
-                    },
-                ),
-            )
+            line_bot_api.push_message(user_id, TextSendMessage(text="❌ 沒有符合條件的物件"))
         else:
-            # 推送 Flex Carousel
             flex_message = {"type": "carousel", "contents": bubbles[:10]}
-            line_bot_api.push_message(
-                user_id,
-                FlexSendMessage(alt_text="搜尋結果", contents=flex_message),
-            )
+            line_bot_api.push_message(user_id, FlexSendMessage(alt_text="搜尋結果", contents=flex_message))
 
         return jsonify({"status": "ok"}), 200
 
@@ -260,6 +227,69 @@ def submit_search():
         log.exception("[submit_search] error")
         return jsonify({"status": "error", "message": str(e)}), 400
 
+# -------------------- 預約賞屋表單 --------------------
+@app.route("/submit_booking", methods=["POST"])
+def submit_booking():
+    try:
+        data = request.get_json(force=True, silent=True) or request.form.to_dict()
+        house_id   = data.get("house_id")
+        house_title= data.get("house_title")
+        name       = data.get("name")
+        phone      = data.get("phone")
+        timeslot   = data.get("timeslot")
+        user_id    = data.get("user_id")
+
+        if not (house_id and name and phone and timeslot and user_id):
+            return jsonify({"status": "error", "message": "缺少必要欄位"}), 400
+
+        db.collection("appointments").document().set({
+            "house_id": house_id, "house_title": house_title,
+            "name": name, "phone": phone, "timeslot": timeslot, "user_id": user_id,
+            "status": "pending", "created_at": firestore.SERVER_TIMESTAMP
+        })
+
+        line_bot_api.push_message(user_id, TextSendMessage(text=f"✅ 已收到您的預約\n物件：{house_title}\n時段：{timeslot}\n我們將盡快與您聯繫 📞"))
+        return jsonify({"status": "success"}), 200
+    except Exception as e:
+        log.exception("[submit_booking] error")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# -------------------- PostbackEvent (物件詳情) --------------------
+@handler.add(PostbackEvent)
+def handle_postback(event):
+    data = event.postback.data
+    params = parse_qs(data or "")
+    action = (params.get("action") or [None])[0]
+    house_id = (params.get("id") or [None])[0]
+
+    if action == "detail" and house_id:
+        user_id = getattr(event.source, "user_id", None)
+        source_type = getattr(event.source, "type", "unknown")
+
+        if source_type == "user" and user_id:
+            pass  # 可選擇是否要顯示 loading 動畫
+
+        cache_key = f"listing:{house_id}"
+        house = _detail_cache.get(cache_key)
+        if house is None:
+            doc = db.collection("listings").document(house_id).get()
+            if not doc.exists:
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text="❌ 找不到物件資訊"))
+                return
+            house = doc.to_dict() or {}
+            _detail_cache.set(cache_key, house)
+
+        try:
+            try:
+                flex_json = property_flex(house_id, house, LIFF_URL_BOOKING)
+            except TypeError:
+                flex_json = property_flex(house_id, house)
+        except Exception as e:
+            log.error(f"[Postback] 產生 Flex 失敗, house_id={house_id}, error={e}")
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="❌ 物件詳情載入失敗"))
+            return
+
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text=f"物件詳情：{house.get('title', house_id)}", contents=flex_json))
 
 # -------------------- Debug push --------------------
 @app.route("/debug/push/<user_id>")
@@ -275,7 +305,6 @@ def debug_push(user_id):
 def callback():
     signature = request.headers.get("X-Line-Signature", "")
     body = request.get_data(as_text=True)
-    log.info(f"[callback] body={body}")
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
