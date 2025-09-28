@@ -475,6 +475,15 @@ def api_booking():
         log.exception("[api_booking] error")
         return jsonify({"status": "error", "message": str(e)}), 500
     
+# -------------------- Debug: 顯示房仲 ID --------------------
+@app.route("/debug/agent")
+def debug_agent():
+    agent_id = os.getenv("AGENT_LINE_USER_ID")
+    if agent_id:
+        return f"✅ AGENT_LINE_USER_ID = {agent_id}"
+    else:
+        return "❌ 沒有讀到 AGENT_LINE_USER_ID，請檢查 .env"
+    
 # -------------------- 測試 --------------------
 @app.route("/debug/push/<user_id>")
 def debug_push(user_id):
