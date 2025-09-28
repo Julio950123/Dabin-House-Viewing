@@ -287,71 +287,72 @@ def submit_form():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# -------------------- 查詢物件 --------------------
+# -------------------- 查詢物件表單 --------------------
 @app.route("/submit_search", methods=["POST"])
 def submit_search():
     try:
         data = request.get_json(force=True, silent=True) or request.form.to_dict()
-        budget = data.get("budget")
-        room   = data.get("room")
-        genre  = data.get("genre")
-        user_id= data.get("user_id")
+        user_id = data.get("user_id")
+        budget  = data.get("budget")
+        room    = data.get("room")
+        genre   = data.get("genre")
 
-        log.info(f"[submit_search] 收到資料: {data}")
-        log.info(f"[submit_search] budget={budget}, room={room}, genre={genre}, user_id={user_id}")
+        log.info(f"[submit_search] 收到 user_id={user_id}, budget={budget}, room={room}, genre={genre}")
 
         if not user_id:
-            return jsonify({"status": "error", "message": "missing user_id"}), 400
+            return jsonify({"status": "error", "message": "❌ 缺少 user_id"}), 400
 
-        # 儲存 search_form 紀錄
-        db.collection("search_form").document().set({
-            "budget": budget,
-            "room": room,
-            "genre": genre,
-            "user_id": user_id,
-            "created_at": firestore.SERVER_TIMESTAMP
-        })
-
-        # 建立查詢
+        # Firestore 查 listings 集合
         query = db.collection("listings")
-
-        if budget and "-" in budget:
-            min_budget, max_budget = budget.split("-")
-            min_budget, max_budget = int(min_budget), int(max_budget)
-            if min_budget > 0:
-                query = query.where("price", ">=", min_budget)
-            if max_budget < 99999:
-                query = query.where("price", "<=", max_budget)
-
-        if room and room.isdigit() and int(room) > 0:
+        if room and room != "0":  
             query = query.where("room", "==", int(room))
-
-        if genre and genre != "不限":
+        if genre:
             query = query.where("genre", "==", genre)
 
-        docs = query.limit(5).stream()
-        bubbles = []
-        for doc in docs:
-            house = doc.to_dict() or {}
-            log.info(f"[submit_search] house={house}")
+        docs = list(query.stream())
+        log.info(f"[submit_search] 找到 {len(docs)} 筆 listings (未過濾價格)")
+
+        # 預算範圍解析
+        min_budget, max_budget = None, None
+        if budget:
             try:
-                bubbles.append(ft.listing_card(doc.id, house))
+                if "-" in budget:
+                    parts = budget.replace("萬", "").split("-")
+                    min_budget, max_budget = int(parts[0]), int(parts[1])
+                elif "以下" in budget:
+                    max_budget = int(budget.replace("萬以下", ""))
+                elif "以上" in budget:
+                    min_budget = int(budget.replace("萬以上", ""))
             except Exception as e:
-                log.error(f"[submit_search] listing_card error, id={doc.id}, e={e}")
+                log.warning(f"[submit_search] 預算解析失敗: {e}")
 
-        if bubbles:
-            carousel = {"type": "carousel", "contents": bubbles}
-            line_bot_api.push_message(user_id, FlexSendMessage(alt_text="找到物件", contents=carousel))
-            log.info(f"[submit_search] ✅ 推送 {len(bubbles)} 筆結果")
+        # Python 過濾價格
+        bubbles = []
+        for d in docs:
+            data = d.to_dict()
+            price = data.get("price")
+            if price is not None:
+                if min_budget and price < min_budget:
+                    continue
+                if max_budget and price > max_budget:
+                    continue
+            try:
+                bubbles.append(ft.listing_card(d.id, data))
+            except Exception as e:
+                log.error(f"[submit_search] listing_card 失敗 doc_id={d.id}, error={e}")
+
+        if not bubbles:
+            line_bot_api.push_message(user_id, TextSendMessage(text="❌ 沒有符合條件的物件"))
         else:
-            line_bot_api.push_message(user_id, TextSendMessage(text="❌ 沒有符合的物件"))
-            log.info("[submit_search] ⚠️ 沒有符合的物件")
+            flex_message = {"type": "carousel", "contents": bubbles[:10]}
+            line_bot_api.push_message(user_id, FlexSendMessage(alt_text="搜尋結果", contents=flex_message))
 
-        return jsonify({"status": "success"})
+        return jsonify({"status": "ok"}), 200
 
     except Exception as e:
-        log.exception(f"[submit_search] ❌ 系統錯誤: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        log.exception("[submit_search] error")
+        return jsonify({"status": "error", "message": str(e)}), 400
+    
 
 # -------------------- 預約賞屋表單 --------------------
 @app.route("/submit_booking", methods=["POST"])
@@ -392,47 +393,45 @@ def submit_booking():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # -------------------- PostbackEvent (物件詳情) --------------------
-from flex_templates import property_flex
-
 @handler.add(PostbackEvent)
 def handle_postback(event):
     data = event.postback.data
     log.info(f"[PostbackEvent] data={data}")
 
+    # 解析 Postback 資料
     params = parse_qs(data or "")
     action = (params.get("action") or [None])[0]
-    house_id = (params.get("id") or [None])[0]
+    doc_id = (params.get("id") or [None])[0]   # Firestore 的 document.id，例如 test0001
 
-    log.info(f"[PostbackEvent] action={action}, house_id={house_id}")
+    log.info(f"[PostbackEvent] action={action}, doc_id={doc_id}")
 
-    if action == "detail" and house_id:
-        user_id = getattr(event.source, "user_id", None)
-        source_type = getattr(event.source, "type", "unknown")
-        log.info(f"[PostbackEvent] source_type={source_type}, user_id={user_id}")
+    if action == "detail" and doc_id:
+        try:
+            # 取 Firestore 資料
+            doc = db.collection("listings").document(doc_id).get()
+            if not doc.exists:
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="❌ 找不到該物件資料")
+                )
+                return
 
-        # ✅ 先非阻塞發出動畫（只在 1:1 對話）
-        if source_type == "user" and user_id:
-            send_loading_animation_async(user_id, 5)
+            data = doc.to_dict()
+            flex = property_flex(doc_id, data, LIFF_URL_BOOKING)
 
-        # 🔄 先看快取，沒有再查 Firestore
-        cache_key = f"listing:{house_id}"
-        house = _detail_cache.get(cache_key)
-        if house is None:
-            doc = db.collection("listings").document(house_id).get()
-            house = doc.to_dict() or {}
-            _detail_cache.set(cache_key, house)
-
-        # 產生詳情 Flex
-        flex_json = property_flex(house_id, house)
-
-        # 回覆 Flex（送出訊息後動畫會自動結束）
-        line_bot_api.reply_message(
-            event.reply_token,
-            FlexSendMessage(
-                alt_text=f"物件詳情：{house.get('title', '')}",
-                contents=flex_json
+            line_bot_api.reply_message(
+                event.reply_token,
+                FlexSendMessage(
+                    alt_text=f"物件詳情 - {data.get('title','')}",
+                    contents=flex
+                )
             )
-        )
+        except Exception as e:
+            log.exception("[PostbackEvent] 物件詳情錯誤")
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=f"❌ 發生錯誤：{e}")
+            )
 
 # -------------------- 基礎路由 --------------------
 @app.route("/", methods=["GET"])
