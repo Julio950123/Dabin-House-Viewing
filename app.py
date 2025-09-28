@@ -391,15 +391,6 @@ def submit_search():
         log.exception("[submit_search] error")
         return jsonify({"status": "error", "message": str(e)}), 400
 
-
-# -------------------- Debug push --------------------
-@app.route("/debug/push/<user_id>")
-def debug_push(user_id):
-    try:
-        line_bot_api.push_message(user_id, TextSendMessage(text="✅ 測試 Push 成功！"))
-        return "ok"
-    except Exception as e:
-        return f"❌ Push 失敗: {e}", 500
     
 
     
