@@ -293,101 +293,113 @@ def submit_form():
         log.exception("[submit_form] error")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# -------------------- 搜尋表單提交 --------------------
+# -------------------- 查詢物件 --------------------
 @app.route("/submit_search", methods=["POST"])
 def submit_search():
     try:
-        data = request.get_json(force=True, silent=True) or request.form.to_dict()
+        data = request.get_json(force=True)
         user_id = data.get("user_id")
-        budget  = data.get("budget", "未填")
-        room    = data.get("room", "未填")
-        genre   = data.get("genre", "未填")
+        budget  = data.get("budget")
+        room    = data.get("room")
+        genre   = data.get("genre")
 
-        log.info(f"[submit_search] user_id={user_id}, budget={budget}, room={room}, genre={genre}")
+        log.info(f"[submit_search] 收到 user_id={user_id}, budget={budget}, room={room}, genre={genre}")
 
         if not user_id:
             return jsonify({"status": "error", "message": "❌ 缺少 user_id"}), 400
 
-        # ✅ 存到 search_form 集合（以 user_id 為文件 ID）
-        doc_ref = db.collection("search_form").document(user_id)
-        payload = {
-            "user_id": user_id,
-            "budget": budget,
-            "room": room,
-            "genre": genre,
-            "updated_at": firestore.SERVER_TIMESTAMP
-        }
-        doc_ref.set(payload, merge=True)
-        log.info("[submit_search] ✅ 已寫入 search_form")
-
-        # 🔹 回傳搜尋條件卡
-        search_card = {
-            "type": "bubble",
-            "size": "mega",
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "spacing": "md",
-                "contents": [
-                    {"type": "text", "text": "🔎 搜尋條件", "weight": "bold", "size": "lg", "color": "#EB941E"},
-                    {"type": "separator", "margin": "md"},
-                    {"type": "text", "text": f"💰 預算：{budget}", "wrap": True},
-                    {"type": "text", "text": f"🏠 格局：{room}", "wrap": True},
-                    {"type": "text", "text": f"🏢 型態：{genre}", "wrap": True}
-                ]
-            }
-        }
-        line_bot_api.push_message(user_id, FlexSendMessage(alt_text="搜尋條件", contents=search_card))
-
-        # 🔹 繼續查詢 houses 集合
+        # Firestore 查 listings 集合
         query = db.collection("listings")
-        if budget and budget != "不限":
-            try:
-                max_budget = budget.replace("萬", "")
-                if "-" in max_budget:
-                    max_budget = int(max_budget.split("-")[-1])
-                elif "以上" in max_budget:
-                    max_budget = 9999999
-                query = query.where("budget", "<=", int(max_budget))
-            except Exception as e:
-                log.error(f"[submit_search] 預算格式錯誤: {e}")
 
-        if room and room != "未填":
-            query = query.where("room", "==", room)
-        if genre and genre not in ["未填", "不限"]:
+        # ✅ 格局條件 (轉 int，比對 Firestore 的 room:int)
+        if room and room != "0":  # 0 = 不限
+            query = query.where("room", "==", int(room))
+            log.info(f"[submit_search] 加入 room 條件 == {room}")
+
+        # ✅ 型態條件（必填）
+        if genre:
             query = query.where("genre", "==", genre)
+            log.info(f"[submit_search] 加入 genre 條件 == {genre}")
 
+        # 先拿 Firestore 查詢結果
         docs = list(query.stream())
-        bubbles = []
+        log.info(f"[submit_search] 找到 {len(docs)} 筆 listings (未過濾價格)")
 
-        for doc in docs:
+        for d in docs:
+            log.info(f"[submit_search] doc_id={d.id}, price={d.to_dict().get('price')}, room={d.to_dict().get('room')}, genre={d.to_dict().get('genre')}")
+
+        # ✅ 預算範圍解析
+        min_budget, max_budget = None, None
+        if budget:
             try:
-                house = doc.to_dict()
-                bubble = listing_card(doc.id, house)
-                if bubble:
-                    bubbles.append(bubble)
+                if "-" in budget:  # 例：1000-1500
+                    parts = budget.replace("萬", "").split("-")
+                    min_budget, max_budget = int(parts[0]), int(parts[1])
+                elif "以下" in budget:  # 例：1000萬以下
+                    max_budget = int(budget.replace("萬以下", ""))
+                elif "以上" in budget:  # 例：3000萬以上
+                    min_budget = int(budget.replace("萬以上", ""))
+                log.info(f"[submit_search] budget 條件 min={min_budget}, max={max_budget}")
             except Exception as e:
-                log.exception(f"[submit_search] 物件 {doc.id} 產生卡片失敗: {e}")
+                log.warning(f"[submit_search] 預算解析失敗: {e}")
 
+        # ✅ Python 再過濾價格
+        bubbles = []
+        for d in docs:
+            data = d.to_dict()
+            price = data.get("price")
+            if price is not None:
+                if min_budget and price < min_budget:
+                    continue
+                if max_budget and price > max_budget:
+                    continue
+
+            try:
+                bubbles.append(ft.listing_card(d.id, data))
+            except Exception as e:
+                log.error(f"[submit_search] listing_card 失敗 doc_id={d.id}, error={e}")
+
+        # 沒找到 → 回傳提示
         if not bubbles:
-            no_result = {
-                "type": "bubble",
-                "body": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [{"type": "text", "text": "❌ 沒有符合條件的物件"}]
-                }
-            }
-            line_bot_api.push_message(user_id, FlexSendMessage(alt_text="搜尋結果", contents=no_result))
+            line_bot_api.push_message(
+                user_id,
+                FlexSendMessage(
+                    alt_text="搜尋結果",
+                    contents={
+                        "type": "bubble",
+                        "body": {
+                            "type": "box",
+                            "layout": "vertical",
+                            "contents": [
+                                {"type": "text", "text": "❌ 沒有符合條件的物件"}
+                            ]
+                        },
+                    },
+                ),
+            )
         else:
-            carousel = {"type": "carousel", "contents": bubbles[:10]}
-            line_bot_api.push_message(user_id, FlexSendMessage(alt_text="搜尋結果", contents=carousel))
+            # 推送 Flex Carousel
+            flex_message = {"type": "carousel", "contents": bubbles[:10]}
+            line_bot_api.push_message(
+                user_id,
+                FlexSendMessage(alt_text="搜尋結果", contents=flex_message),
+            )
 
         return jsonify({"status": "ok"}), 200
 
     except Exception as e:
         log.exception("[submit_search] error")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+
+# -------------------- Debug push --------------------
+@app.route("/debug/push/<user_id>")
+def debug_push(user_id):
+    try:
+        line_bot_api.push_message(user_id, TextSendMessage(text="✅ 測試 Push 成功！"))
+        return "ok"
+    except Exception as e:
+        return f"❌ Push 失敗: {e}", 500
     
 
     
