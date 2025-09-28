@@ -44,11 +44,9 @@ LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET", "")
 # LIFF Apps
 LIFF_ID_SUBSCRIBE = os.getenv("LIFF_ID_SUBSCRIBE", "")
 LIFF_ID_BOOKING   = os.getenv("LIFF_ID_BOOKING", "")
-LIFF_ID_SHARE     = os.getenv("LIFF_ID_SHARE", "")
 
 LIFF_URL_SUBSCRIBE = f"https://liff.line.me/{LIFF_ID_SUBSCRIBE}"
 LIFF_URL_BOOKING   = f"https://liff.line.me/{LIFF_ID_BOOKING}"
-LIFF_URL_SHARE     = f"https://liff.line.me/{LIFF_ID_SHARE}"
 
 AGENT_LINE_USER_ID = os.getenv("AGENT_LINE_USER_ID", "")
 
@@ -99,7 +97,7 @@ def show_search_form():
 @app.route("/share")
 def share_page():
     """LIFF 分享頁面"""
-    return render_template("share.html", liff_id=LIFF_ID_SHARE)
+    return render_template("share.html")
 
 @app.route("/booking")
 def booking():
@@ -450,7 +448,7 @@ def api_booking():
                 "layout": "vertical",
                 "spacing": "md",
                 "contents": [
-                    {"type": "text", "text": "預約成功！", "weight": "bold", "size": "lg", "color": "#EB941E"},
+                    {"type": "text", "text": "✅ 預約成功！", "weight": "bold", "size": "lg", "color": "#EB941E"},
                     {"type": "text", "text": f"物件：{house_title}", "wrap": True},
                     {"type": "text", "text": f"姓名：{name}", "wrap": True},
                     {"type": "text", "text": f"電話：{phone}", "wrap": True},
@@ -476,11 +474,11 @@ def api_booking():
             agent_id = os.getenv("AGENT_LINE_USER_ID")  # 在 .env.local / .env.prod 裡設定
             if agent_id:
                 agent_message = (
-                    f"有人預約囉！\n\n"
-                    f"物件：{house_title}\n"
-                    f"姓名：{name}\n"
-                    f"電話：{phone}\n"
-                    f"時段：{timeslot_cn}"
+                    f"📢 有人預約囉！\n\n"
+                    f"🏠 物件：{house_title}\n"
+                    f"👤 姓名：{name}\n"
+                    f"📞 電話：{phone}\n"
+                    f"🕒 時段：{timeslot_cn}"
                 )
                 line_bot_api.push_message(agent_id, TextSendMessage(text=agent_message))
                 log.info(f"[api_booking] ✅ 已通知房仲 agent_id={agent_id}")
