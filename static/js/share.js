@@ -3,7 +3,7 @@ const LIFF_ID = "2007720984-L3DXgr6m"; // ⚠️ 換成你的 LIFF ID
 
 // 🔹 Firebase Config
 const firebaseConfig = {
-  apiKey: "AIzaSyA5dcyj0_2GYBh2KZ74Ny30UeYUJz9tycU",
+  apiKey: "你的-APIKEY",
   authDomain: "dabin-house-viewing-2c4f0.firebaseapp.com",
   projectId: "dabin-house-viewing-2c4f0"
 };
