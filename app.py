@@ -48,6 +48,8 @@ LIFF_ID_BOOKING   = os.getenv("LIFF_ID_BOOKING", "")
 LIFF_URL_SUBSCRIBE = f"https://liff.line.me/{LIFF_ID_SUBSCRIBE}"
 LIFF_URL_BOOKING   = f"https://liff.line.me/{LIFF_ID_BOOKING}"
 
+AGENT_LINE_USER_ID = os.getenv("AGENT_LINE_USER_ID", "")
+
 if not LINE_CHANNEL_ACCESS_TOKEN or not LINE_CHANNEL_SECRET:
     raise ValueError("❌ 請先設定 LINE_CHANNEL_ACCESS_TOKEN 與 LINE_CHANNEL_SECRET 環境變數")
 
