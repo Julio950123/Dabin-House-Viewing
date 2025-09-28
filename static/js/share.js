@@ -8,10 +8,6 @@ const firebaseConfig = {
   projectId: "dabin-house-viewing-2c4f0"
 };
 
-// 先初始化 Firebase
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-
 // 取得網址參數
 function getQueryParam(name) {
   return new URLSearchParams(window.location.search).get(name);
