@@ -400,6 +400,7 @@ def handle_postback(event):
     data = event.postback.data
     log.info(f"[PostbackEvent] data={data}")
 
+    # 解析 Postback 資料
     params = parse_qs(data or "")
     action = (params.get("action") or [None])[0]
     house_id = (params.get("id") or [None])[0]
@@ -407,26 +408,21 @@ def handle_postback(event):
     log.info(f"[PostbackEvent] action={action}, house_id={house_id}")
 
     if action == "detail" and house_id:
-        user_id = getattr(event.source, "user_id", None)
-        source_type = getattr(event.source, "type", "unknown")
-        log.info(f"[PostbackEvent] source_type={source_type}, user_id={user_id}")
+        # 🔄 查 Firestore
+        doc = db.collection("listings").document(house_id).get()
+        if not doc.exists:
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="❌ 找不到物件，可能已下架")
+            )
+            return
 
-        # ✅ 先非阻塞發出動畫（只在 1:1 對話）
-        if source_type == "user" and user_id:
-            send_loading_animation_async(user_id, 5)
-
-        # 🔄 先看快取，沒有再查 Firestore
-        cache_key = f"listing:{house_id}"
-        house = _detail_cache.get(cache_key)
-        if house is None:
-            doc = db.collection("listings").document(house_id).get()
-            house = doc.to_dict() or {}
-            _detail_cache.set(cache_key, house)
+        house = doc.to_dict()
 
         # 產生詳情 Flex
         flex_json = property_flex(house_id, house)
 
-        # 回覆 Flex（送出訊息後動畫會自動結束）
+        # 回覆 Flex
         line_bot_api.reply_message(
             event.reply_token,
             FlexSendMessage(
