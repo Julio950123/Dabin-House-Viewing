@@ -391,9 +391,7 @@ def submit_search():
         log.exception("[submit_search] error")
         return jsonify({"status": "error", "message": str(e)}), 400
 
-    
 
-    
 # -------------------- 預約賞屋表單 --------------------
 @app.route("/api/booking", methods=["POST"])
 def api_booking():
@@ -426,7 +424,7 @@ def api_booking():
         })
         log.info("[api_booking] ✅ Firestore 寫入成功")
 
-        # ---------------- Flex 卡片 ----------------
+        # ---------------- Flex 卡片：回覆使用者 ----------------
         success_card = {
             "type": "bubble",
             "size": "mega",
@@ -446,7 +444,7 @@ def api_booking():
             }
         }
 
-        # ---------------- Push LINE ----------------
+        # ---------------- Push 給使用者 ----------------
         try:
             line_bot_api.push_message(
                 user_id,
@@ -455,6 +453,21 @@ def api_booking():
             log.info(f"[api_booking] ✅ Push 成功 user_id={user_id}")
         except Exception as e:
             log.exception(f"[api_booking] ❌ Push 失敗 user_id={user_id}, error={e}")
+
+        # ---------------- Push 給房仲 ----------------
+        try:
+            agent_id = os.getenv("AGENT_LINE_USER_ID")  # 在 .env.local / .env.prod 裡設定
+            if agent_id:
+                agent_message = f"📢 有人預約囉！\n\n🏠 物件：{house_title}\n👤 姓名：{name}\n📞 電話：{phone}\n🕒 時段：{timeslot}"
+                line_bot_api.push_message(
+                    agent_id,
+                    TextSendMessage(text=agent_message)
+                )
+                log.info(f"[api_booking] ✅ 已通知房仲 agent_id={agent_id}")
+            else:
+                log.warning("[api_booking] ⚠️ 沒有設定 AGENT_LINE_USER_ID")
+        except Exception as e:
+            log.exception(f"[api_booking] ❌ 通知房仲失敗 error={e}")
 
         return jsonify({"status": "success"}), 200
 
