@@ -393,45 +393,47 @@ def submit_booking():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # -------------------- PostbackEvent (物件詳情) --------------------
+from flex_templates import property_flex
+
 @handler.add(PostbackEvent)
 def handle_postback(event):
     data = event.postback.data
     log.info(f"[PostbackEvent] data={data}")
 
-    # 解析 Postback 資料
     params = parse_qs(data or "")
     action = (params.get("action") or [None])[0]
-    doc_id = (params.get("id") or [None])[0]   # Firestore 的 document.id，例如 test0001
+    house_id = (params.get("id") or [None])[0]
 
-    log.info(f"[PostbackEvent] action={action}, doc_id={doc_id}")
+    log.info(f"[PostbackEvent] action={action}, house_id={house_id}")
 
-    if action == "detail" and doc_id:
-        try:
-            # 取 Firestore 資料
-            doc = db.collection("listings").document(doc_id).get()
-            if not doc.exists:
-                line_bot_api.reply_message(
-                    event.reply_token,
-                    TextSendMessage(text="❌ 找不到該物件資料")
-                )
-                return
+    if action == "detail" and house_id:
+        user_id = getattr(event.source, "user_id", None)
+        source_type = getattr(event.source, "type", "unknown")
+        log.info(f"[PostbackEvent] source_type={source_type}, user_id={user_id}")
 
-            data = doc.to_dict()
-            flex = property_flex(doc_id, data, LIFF_URL_BOOKING)
+        # ✅ 先非阻塞發出動畫（只在 1:1 對話）
+        if source_type == "user" and user_id:
+            send_loading_animation_async(user_id, 5)
 
-            line_bot_api.reply_message(
-                event.reply_token,
-                FlexSendMessage(
-                    alt_text=f"物件詳情 - {data.get('title','')}",
-                    contents=flex
-                )
+        # 🔄 先看快取，沒有再查 Firestore
+        cache_key = f"listing:{house_id}"
+        house = _detail_cache.get(cache_key)
+        if house is None:
+            doc = db.collection("listings").document(house_id).get()
+            house = doc.to_dict() or {}
+            _detail_cache.set(cache_key, house)
+
+        # 產生詳情 Flex
+        flex_json = property_flex(house_id, house)
+
+        # 回覆 Flex（送出訊息後動畫會自動結束）
+        line_bot_api.reply_message(
+            event.reply_token,
+            FlexSendMessage(
+                alt_text=f"物件詳情：{house.get('title', '')}",
+                contents=flex_json
             )
-        except Exception as e:
-            log.exception("[PostbackEvent] 物件詳情錯誤")
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text=f"❌ 發生錯誤：{e}")
-            )
+        )
 
 # -------------------- 基礎路由 --------------------
 @app.route("/", methods=["GET"])
