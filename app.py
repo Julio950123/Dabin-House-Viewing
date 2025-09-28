@@ -181,7 +181,7 @@ def handle_message(event):
     user_id = event.source.user_id
     log.info(f"[handle_message] 收到訊息: {repr(msg)} user_id={user_id}")
 
-    if msg == "中壢夜市生活圈精選":
+    if msg == "高鐵生活圈精選":
         flex = get_top_flex()
         if flex:
             line_bot_api.reply_message(
