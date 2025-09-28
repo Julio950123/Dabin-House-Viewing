@@ -73,7 +73,7 @@ const flexMessage = {
           action: {
             type: "uri",
             label: "物件詳情請至LINE@搜尋",
-            uri: "https://line.me/R/ti/p/@220keqou" // ⚠️ 改成你的 LINE 官方帳號 ID
+            uri: "https://line.me/R/ti/p/999mxdib" // ⚠️ 改成你的 LINE 官方帳號 ID
           }
         }
       ]
