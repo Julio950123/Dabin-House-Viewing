@@ -55,7 +55,7 @@ def manage_condition_card(budget: str, room: str, genre: str, liff_url: str) -> 
                     "type": "text",
                     "text": "當前追蹤條件",
                     "weight": "bold",
-                    "size": "sm",
+                    "size": "lg",
                     "color": "#333333",
                     "margin": "sm"
                 },
@@ -66,9 +66,9 @@ def manage_condition_card(budget: str, room: str, genre: str, liff_url: str) -> 
                     "margin": "md",
                     "spacing": "md",
                     "contents": [
-                        {"type": "text", "text": f"預算：{budget or '-'}", "size": "sm", "wrap": True},
-                        {"type": "text", "text": f"格局：{room or '-'}", "size": "sm", "wrap": True},
-                        {"type": "text", "text": f"類型：{genre or '-'}", "size": "sm", "wrap": True}
+                        {"type": "text", "text": f"預算：{budget or '-'}", "size": "md", "wrap": True},
+                        {"type": "text", "text": f"格局：{room or '-'}", "size": "md", "wrap": True},
+                        {"type": "text", "text": f"類型：{genre or '-'}", "size": "md", "wrap": True}
                     ]
                 }
             ]
