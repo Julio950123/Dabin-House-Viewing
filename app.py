@@ -205,10 +205,10 @@ def handle_message(event):
             FlexSendMessage(alt_text="立即找房", contents=ft.search_card())
         )
 
-    elif msg == "你是誰":
+    elif msg == "你的介紹":
         line_bot_api.reply_message(
             event.reply_token,
-            FlexSendMessage(alt_text="你是誰", contents=ft.intro_card())
+            FlexSendMessage(alt_text="自我介紹", contents=ft.intro_card())
         )
 
     elif msg == "管理我的追蹤條件":

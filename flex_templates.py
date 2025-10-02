@@ -174,7 +174,7 @@ def intro_card() -> dict:
                             "justifyContent": "space-between"
                         },
                         {"type": "text", "text": "桃園市中壢區", "size": "20px", "weight": "bold", "color": "#FF8000", "margin": "10px"},
-                        {"type": "text", "text": "熊理想領航團隊 - 專注您的委託\n四家店服務 - 專業深耕服務在地\n用心乘載您對成家的想法\n", "size": "15px", "wrap": True, "margin": "10px"},
+                        {"type": "text", "text": "熊理想領航團隊 - 專注您的委託\n四家店服務 - 專業深耕服務在地\n用心乘載您對成家的想法\n\n專營大青埔特區房地買賣，資訊分享！\n讓我們一起來當青埔人!!", "size": "15px", "wrap": True, "margin": "10px"},
                         {"type": "separator", "color": "#101010", "margin": "15px"},
                         # Footer (CTA 按鈕)
                         {
@@ -202,7 +202,7 @@ def intro_card() -> dict:
                                     "cornerRadius": "5px",
                                     "justifyContent": "center",
                                     "alignItems": "center",
-                                    "action": {"type": "uri", "label": "action", "uri": "tel:0937339406"}
+                                    "action": {"type": "uri", "label": "action", "uri": "tel:0982501330"}
                                 }
                             ],
                             "justifyContent": "space-between",
