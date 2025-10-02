@@ -136,14 +136,14 @@ def intro_card() -> dict:
                     "size": "80%",
                     "aspectMode": "cover",
                     "aspectRatio": "1:1",
-                    "url": "https://res.cloudinary.com/daj9nkjd1/image/upload/v1757148957/%E9%A0%AD%E8%B2%BC_a1gz5t.png"
+                    "url": "https://res.cloudinary.com/daj9nkjd1/image/upload/v1759433369/%E9%A0%AD%E8%B2%BC1_zgirv1.jpg"
                 },
                 # Body 區塊 (文字與標籤)
                 "body": {
                     "type": "box",
                     "layout": "vertical",
                     "contents": [
-                        {"type": "text", "text": "金牌房仲", "weight": "bold", "align": "center", "size": "20px"},
+                        {"type": "text", "text": "彭振淇(美國熊)", "weight": "bold", "align": "center", "size": "20px", "offsetBottom": "20px"},
                         {
                             "type": "box",
                             "layout": "horizontal",
@@ -151,7 +151,7 @@ def intro_card() -> dict:
                                 {
                                     "type": "box",
                                     "layout": "vertical",
-                                    "contents": [{"type": "text", "text": "新世代自媒體", "color": "#7B7B7B"}],
+                                    "contents": [{"type": "text", "text": "熊理想領航團隊", "color": "#7B7B7B"}],
                                     "backgroundColor": "#D0D0D0",
                                     "cornerRadius": "5px",
                                     "height": "23px",
@@ -162,7 +162,7 @@ def intro_card() -> dict:
                                 {
                                     "type": "box",
                                     "layout": "vertical",
-                                    "contents": [{"type": "text", "text": "優質資深房仲", "color": "#7B7B7B"}],
+                                    "contents": [{"type": "text", "text": "深耕服務在地", "color": "#7B7B7B"}],
                                     "backgroundColor": "#D0D0D0",
                                     "alignItems": "center",
                                     "cornerRadius": "5px",
@@ -174,7 +174,7 @@ def intro_card() -> dict:
                             "justifyContent": "space-between"
                         },
                         {"type": "text", "text": "桃園市中壢區", "size": "20px", "weight": "bold", "color": "#FF8000", "margin": "10px"},
-                        {"type": "text", "text": "擁有多年的房地產經驗\n平時也經營 TikTok、YouTube   用影片分析房市趨勢，也分享生活趣事\n\n想買房、換屋，或了解市場，都歡迎與我聊聊！", "size": "15px", "wrap": True, "margin": "10px"},
+                        {"type": "text", "text": "熊理想領航團隊 - 專注您的委託\n四家店服務 - 專業深耕服務在地\n用心乘載您對成家的想法\n", "size": "15px", "wrap": True, "margin": "10px"},
                         {"type": "separator", "color": "#101010", "margin": "15px"},
                         # Footer (CTA 按鈕)
                         {
