@@ -176,7 +176,7 @@ class TinyTTLCache:
 
 _detail_cache = TinyTTLCache(maxsize=256, ttl=30)
 
-# -------------------- LINE Bot MessageEvent --------------------
+# -------------------- 關鍵字回覆 --------------------
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     msg = event.message.text.strip()
@@ -245,7 +245,7 @@ def handle_message(event):
                 ),
             )
 
-# -------------------- FollowEvent --------------------
+# -------------------- 歡迎訊息 --------------------
 @handler.add(FollowEvent)
 def handle_follow(event):
     welcome_text = (
@@ -310,7 +310,7 @@ def submit_search():
         if not user_id:
             return jsonify({"status": "error", "message": "❌ 缺少 user_id"}), 400
 
-        # Firestore 查 listings 集合
+        # ---------------- Firestore 查 listings 集合 ----------------
         query = db.collection("listings")
 
         # ✅ 格局條件 (轉 int，比對 Firestore 的 room:int)
@@ -328,7 +328,8 @@ def submit_search():
         log.info(f"[submit_search] 找到 {len(docs)} 筆 listings (未過濾價格)")
 
         for d in docs:
-            log.info(f"[submit_search] doc_id={d.id}, price={d.to_dict().get('price')}, room={d.to_dict().get('room')}, genre={d.to_dict().get('genre')}")
+            data_ = d.to_dict()
+            log.info(f"[submit_search] doc_id={d.id}, price={data_.get('price')}, room={data_.get('room')}, genre={data_.get('genre')}")
 
         # ✅ 預算範圍解析
         min_budget, max_budget = None, None
@@ -348,8 +349,8 @@ def submit_search():
         # ✅ Python 再過濾價格
         bubbles = []
         for d in docs:
-            data = d.to_dict()
-            price = data.get("price")
+            data_ = d.to_dict()
+            price = data_.get("price")
             if price is not None:
                 if min_budget and price < min_budget:
                     continue
@@ -357,30 +358,27 @@ def submit_search():
                     continue
 
             try:
-                bubbles.append(ft.listing_card(d.id, data))
+                bubbles.append(ft.listing_card(d.id, data_))
             except Exception as e:
                 log.error(f"[submit_search] listing_card 失敗 doc_id={d.id}, error={e}")
 
-        # 沒找到 → 回傳提示
+        # ---------------- 沒找到 → 回傳提示 ----------------
         if not bubbles:
+            from flex_templates import no_result_card
+            import os
+
+            LIFF_ID_SUBSCRIBE = os.getenv("LIFF_ID_SUBSCRIBE", "")
+            form_url = f"https://liff.line.me/{LIFF_ID_SUBSCRIBE}" if LIFF_ID_SUBSCRIBE else "https://liff.line.me/2007720984-XXXXXXXX"
+
             line_bot_api.push_message(
                 user_id,
                 FlexSendMessage(
                     alt_text="搜尋結果",
-                    contents={
-                        "type": "bubble",
-                        "body": {
-                            "type": "box",
-                            "layout": "vertical",
-                            "contents": [
-                                {"type": "text", "text": "❌ 沒有符合條件的物件"}
-                            ]
-                        },
-                    },
-                ),
+                    contents=no_result_card(form_url)
+                )
             )
         else:
-            # 推送 Flex Carousel
+            # ---------------- 推送 Flex Carousel ----------------
             flex_message = {"type": "carousel", "contents": bubbles[:10]}
             line_bot_api.push_message(
                 user_id,
