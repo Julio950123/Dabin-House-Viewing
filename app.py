@@ -286,7 +286,6 @@ def submit_form():
             "room": room,
             "genre": genre,
             "user_id": user_id,
-            "displayName": displayName,
             "updated_at": firestore.SERVER_TIMESTAMP
         }
         if not existed:
@@ -317,7 +316,16 @@ def submit_search():
         if not user_id:
             return jsonify({"status": "error", "message": "❌ 缺少 user_id"}), 400
 
-        # 查 Firestore listings
+        # ---------------- 取得使用者名稱 ----------------
+        try:
+            profile = line_bot_api.get_profile(user_id)
+            display_name = profile.display_name
+            log.info(f"[submit_search] 使用者名稱：{display_name}")
+        except Exception as e:
+            display_name = "未知使用者"
+            log.warning(f"[submit_search] 無法取得 display_name: {e}")
+
+        # ---------------- 查 Firestore listings ----------------
         query = db.collection("listings")
         if room and room != "0":
             query = query.where("room", "==", int(room))
@@ -327,7 +335,7 @@ def submit_search():
         docs = list(query.stream())
         log.info(f"[submit_search] 找到 {len(docs)} 筆 listings (未過濾價格)")
 
-        # 預算篩選
+        # ---------------- 預算篩選 ----------------
         min_budget, max_budget = None, None
         if budget:
             try:
@@ -341,7 +349,7 @@ def submit_search():
             except Exception as e:
                 log.warning(f"[submit_search] 預算解析失敗: {e}")
 
-        # 篩選並生成 Flex 卡片
+        # ---------------- 篩選並生成 Flex 卡片 ----------------
         bubbles = []
         matched_list = []
         for d in docs:
@@ -366,11 +374,11 @@ def submit_search():
             except Exception as e:
                 log.error(f"[submit_search] listing_card 失敗 doc_id={d.id}, error={e}")
 
-        # 推送搜尋結果
+        # ---------------- 推送搜尋結果 ----------------
         if not bubbles:
             from flex_templates import no_result_card
             LIFF_ID_SUBSCRIBE = os.getenv("LIFF_ID_SUBSCRIBE", "")
-            form_url = f"https://liff.line.me/{LIFF_ID_SUBSCRIBE}" if LIFF_ID_SUBSCRIBE else "https://liff.line.me/2007720984-XXXXXXXX"
+            form_url = f"https://liff.line.me/{LIFF_ID_SUBSCRIBE}" if LIFF_ID_SUBSCRIBE else "#"
             line_bot_api.push_message(
                 user_id,
                 FlexSendMessage(alt_text="搜尋結果", contents=no_result_card(form_url))
@@ -382,17 +390,17 @@ def submit_search():
                 FlexSendMessage(alt_text="搜尋結果", contents=flex_message)
             )
 
-        # Firestore 紀錄搜尋紀錄
+        # ---------------- Firestore 紀錄搜尋紀錄 ----------------
         db.collection("search_logs").add({
             "user_id": user_id,
-            "displayName": displayName,
+            "user_name": display_name,  # ✅ 新增使用者名稱
             "budget": budget,
             "room": room,
             "genre": genre,
             "result_count": len(bubbles),
             "created_at": firestore.SERVER_TIMESTAMP
         })
-        log.info(f"[submit_search] ✅ Firestore 寫入 search_logs 成功 user_id={user_id}")
+        log.info(f"[submit_search] ✅ Firestore 寫入 search_logs 成功 user_id={user_id}, name={display_name}")
 
         return jsonify({"status": "ok"}), 200
 
