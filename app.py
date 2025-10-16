@@ -281,37 +281,6 @@ def submit_form():
         doc_ref = db.collection("forms").document(user_id)
         existed = doc_ref.get().exists
 
-        payload = {"budget": budget, "room": room, "genre": genre, "user_id": user_id,
-                   "updated_at": firestore.SERVER_TIMESTAMP}
-        if not existed:
-            payload["created_at"] = firestore.SERVER_TIMESTAMP
-        doc_ref.set(payload, merge=True)
-
-        title = "🎉 追蹤成功！" if not existed else "條件已更新"
-        card = ft.manage_condition_card(budget, room, genre, LIFF_URL_SUBSCRIBE)
-        line_bot_api.push_message(user_id, FlexSendMessage(alt_text=title, contents=card))
-        return jsonify({"status": "success"}), 200
-    except Exception as e:
-        log.exception("[submit_form] error")
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-# -------------------- 追蹤物件表單提交 --------------------
-@app.route("/submit_form", methods=["POST"])
-def submit_form():
-    try:
-        data = request.get_json(force=True, silent=True) or request.form.to_dict()
-        budget = data.get("budget")
-        room   = data.get("room")
-        genre  = data.get("genre")
-        user_id= data.get("user_id")
-
-        if not user_id:
-            return jsonify({"status": "error", "message": "missing user_id"}), 400
-
-        doc_ref = db.collection("forms").document(user_id)
-        existed = doc_ref.get().exists
-
         payload = {
             "budget": budget,
             "room": room,
