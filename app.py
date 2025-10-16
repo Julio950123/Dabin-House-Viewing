@@ -286,6 +286,7 @@ def submit_form():
             "room": room,
             "genre": genre,
             "user_id": user_id,
+            "displayName": displayName,
             "updated_at": firestore.SERVER_TIMESTAMP
         }
         if not existed:
@@ -384,11 +385,11 @@ def submit_search():
         # Firestore 紀錄搜尋紀錄
         db.collection("search_logs").add({
             "user_id": user_id,
+            "displayName": displayName,
             "budget": budget,
             "room": room,
             "genre": genre,
             "result_count": len(bubbles),
-            "matched_list": matched_list[:5],
             "created_at": firestore.SERVER_TIMESTAMP
         })
         log.info(f"[submit_search] ✅ Firestore 寫入 search_logs 成功 user_id={user_id}")
