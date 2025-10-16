@@ -295,6 +295,43 @@ def submit_form():
         log.exception("[submit_form] error")
         return jsonify({"status": "error", "message": str(e)}), 500
 
+
+# -------------------- 追蹤物件表單提交 --------------------
+@app.route("/submit_form", methods=["POST"])
+def submit_form():
+    try:
+        data = request.get_json(force=True, silent=True) or request.form.to_dict()
+        budget = data.get("budget")
+        room   = data.get("room")
+        genre  = data.get("genre")
+        user_id= data.get("user_id")
+
+        if not user_id:
+            return jsonify({"status": "error", "message": "missing user_id"}), 400
+
+        doc_ref = db.collection("forms").document(user_id)
+        existed = doc_ref.get().exists
+
+        payload = {
+            "budget": budget,
+            "room": room,
+            "genre": genre,
+            "user_id": user_id,
+            "updated_at": firestore.SERVER_TIMESTAMP
+        }
+        if not existed:
+            payload["created_at"] = firestore.SERVER_TIMESTAMP
+        doc_ref.set(payload, merge=True)
+
+        title = "🎉 追蹤成功！" if not existed else "條件已更新"
+        card = ft.manage_condition_card(budget, room, genre, LIFF_URL_SUBSCRIBE)
+        line_bot_api.push_message(user_id, FlexSendMessage(alt_text=title, contents=card))
+        return jsonify({"status": "success"}), 200
+    except Exception as e:
+        log.exception("[submit_form] error")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 # -------------------- 查詢物件 --------------------
 @app.route("/submit_search", methods=["POST"])
 def submit_search():
@@ -310,44 +347,33 @@ def submit_search():
         if not user_id:
             return jsonify({"status": "error", "message": "❌ 缺少 user_id"}), 400
 
-        # ---------------- Firestore 查 listings 集合 ----------------
+        # 查 Firestore listings
         query = db.collection("listings")
-
-        # ✅ 格局條件 (轉 int，比對 Firestore 的 room:int)
-        if room and room != "0":  # 0 = 不限
+        if room and room != "0":
             query = query.where("room", "==", int(room))
-            log.info(f"[submit_search] 加入 room 條件 == {room}")
-
-        # ✅ 型態條件（必填）
         if genre:
             query = query.where("genre", "==", genre)
-            log.info(f"[submit_search] 加入 genre 條件 == {genre}")
 
-        # 先拿 Firestore 查詢結果
         docs = list(query.stream())
         log.info(f"[submit_search] 找到 {len(docs)} 筆 listings (未過濾價格)")
 
-        for d in docs:
-            data_ = d.to_dict()
-            log.info(f"[submit_search] doc_id={d.id}, price={data_.get('price')}, room={data_.get('room')}, genre={data_.get('genre')}")
-
-        # ✅ 預算範圍解析
+        # 預算篩選
         min_budget, max_budget = None, None
         if budget:
             try:
-                if "-" in budget:  # 例：1000-1500
+                if "-" in budget:
                     parts = budget.replace("萬", "").split("-")
                     min_budget, max_budget = int(parts[0]), int(parts[1])
-                elif "以下" in budget:  # 例：1000萬以下
+                elif "以下" in budget:
                     max_budget = int(budget.replace("萬以下", ""))
-                elif "以上" in budget:  # 例：3000萬以上
+                elif "以上" in budget:
                     min_budget = int(budget.replace("萬以上", ""))
-                log.info(f"[submit_search] budget 條件 min={min_budget}, max={max_budget}")
             except Exception as e:
                 log.warning(f"[submit_search] 預算解析失敗: {e}")
 
-        # ✅ Python 再過濾價格
+        # 篩選並生成 Flex 卡片
         bubbles = []
+        matched_list = []
         for d in docs:
             data_ = d.to_dict()
             price = data_.get("price")
@@ -357,40 +383,53 @@ def submit_search():
                 if max_budget and price > max_budget:
                     continue
 
+            matched_list.append({
+                "doc_id": d.id,
+                "title": data_.get("title"),
+                "price": data_.get("price"),
+                "room": data_.get("room"),
+                "genre": data_.get("genre"),
+            })
+
             try:
                 bubbles.append(ft.listing_card(d.id, data_))
             except Exception as e:
                 log.error(f"[submit_search] listing_card 失敗 doc_id={d.id}, error={e}")
 
-        # ---------------- 沒找到 → 回傳提示 ----------------
+        # 推送搜尋結果
         if not bubbles:
             from flex_templates import no_result_card
-            import os
-
             LIFF_ID_SUBSCRIBE = os.getenv("LIFF_ID_SUBSCRIBE", "")
             form_url = f"https://liff.line.me/{LIFF_ID_SUBSCRIBE}" if LIFF_ID_SUBSCRIBE else "https://liff.line.me/2007720984-XXXXXXXX"
-
             line_bot_api.push_message(
                 user_id,
-                FlexSendMessage(
-                    alt_text="搜尋結果",
-                    contents=no_result_card(form_url)
-                )
+                FlexSendMessage(alt_text="搜尋結果", contents=no_result_card(form_url))
             )
         else:
-            # ---------------- 推送 Flex Carousel ----------------
             flex_message = {"type": "carousel", "contents": bubbles[:10]}
             line_bot_api.push_message(
                 user_id,
-                FlexSendMessage(alt_text="搜尋結果", contents=flex_message),
+                FlexSendMessage(alt_text="搜尋結果", contents=flex_message)
             )
+
+        # Firestore 紀錄搜尋紀錄
+        db.collection("search_logs").add({
+            "user_id": user_id,
+            "budget": budget,
+            "room": room,
+            "genre": genre,
+            "result_count": len(bubbles),
+            "matched_list": matched_list[:5],
+            "created_at": firestore.SERVER_TIMESTAMP
+        })
+        log.info(f"[submit_search] ✅ Firestore 寫入 search_logs 成功 user_id={user_id}")
 
         return jsonify({"status": "ok"}), 200
 
     except Exception as e:
         log.exception("[submit_search] error")
         return jsonify({"status": "error", "message": str(e)}), 400
-
+        
 # -------------------- 時段對照表 --------------------
 TIMESLOT_MAP = {
     "weekday-morning": "平日早上",
