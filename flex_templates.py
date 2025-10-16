@@ -471,8 +471,6 @@ def listing_card(doc_id: str, data: dict) -> dict:
 
 # -------------------- Listings Carousel (多頁物件卡片) --------------------
 import urllib.parse
-
-# ----------------- 共用工具函式 -----------------
 def normalize_text(raw: str) -> str:
     if not raw:
         return ""
