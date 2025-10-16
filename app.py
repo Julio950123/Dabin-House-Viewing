@@ -266,6 +266,7 @@ def handle_follow(event):
     line_bot_api.reply_message(event.reply_token, quick_reply)
 
 # -------------------- 追蹤物件表單提交 --------------------
+# -------------------- 追蹤物件表單提交 --------------------
 @app.route("/submit_form", methods=["POST"])
 def submit_form():
     try:
@@ -273,11 +274,21 @@ def submit_form():
         budget = data.get("budget")
         room   = data.get("room")
         genre  = data.get("genre")
-        user_id= data.get("user_id")
+        user_id = data.get("user_id")
 
         if not user_id:
             return jsonify({"status": "error", "message": "missing user_id"}), 400
 
+        # ---------------- 取得使用者名稱 ----------------
+        try:
+            profile = line_bot_api.get_profile(user_id)
+            display_name = profile.display_name
+            log.info(f"[submit_form] 使用者名稱：{display_name}")
+        except Exception as e:
+            display_name = "未知使用者"
+            log.warning(f"[submit_form] 無法取得 display_name: {e}")
+
+        # ---------------- Firestore forms ----------------
         doc_ref = db.collection("forms").document(user_id)
         existed = doc_ref.get().exists
 
@@ -286,16 +297,25 @@ def submit_form():
             "room": room,
             "genre": genre,
             "user_id": user_id,
+            "user_name": display_name,  # ✅ 新增使用者名稱
             "updated_at": firestore.SERVER_TIMESTAMP
         }
+
         if not existed:
             payload["created_at"] = firestore.SERVER_TIMESTAMP
+
         doc_ref.set(payload, merge=True)
 
+        # ---------------- 推送確認卡片 ----------------
         title = "🎉 追蹤成功！" if not existed else "條件已更新"
         card = ft.manage_condition_card(budget, room, genre, LIFF_URL_SUBSCRIBE)
-        line_bot_api.push_message(user_id, FlexSendMessage(alt_text=title, contents=card))
+        line_bot_api.push_message(
+            user_id,
+            FlexSendMessage(alt_text=title, contents=card)
+        )
+
         return jsonify({"status": "success"}), 200
+
     except Exception as e:
         log.exception("[submit_form] error")
         return jsonify({"status": "error", "message": str(e)}), 500
